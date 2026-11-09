@@ -40,16 +40,18 @@
   };
   var BURST_SCALE = 1.15; /* burst slightly larger than the body diameter */
 
-  /* Sway amplitude (px) and frequency character per movement pattern.
-     The pattern comes from levels.json; all balloons share the same rise,
-     only lateral breeze differs - never a per-answer speed boost. */
+  /* Gentle-breeze profile per movement pattern (from levels.json).
+     All balloons share the same rise speed; only the breeze strength
+     differs by level - never a per-answer speed boost.
+     Amps are desktop values; phones scale them down further at spawn. */
   var SWAY = {
-    float:   { amp: 9,  freq: 0.55 },
-    drift:   { amp: 14, freq: 0.70 },
-    wave:    { amp: 20, freq: 0.90 },
-    stagger: { amp: 26, freq: 1.10 },
-    combo:   { amp: 32, freq: 1.30 }
+    float:   { amp: 8 },
+    drift:   { amp: 10 },
+    wave:    { amp: 12 },
+    stagger: { amp: 14 },
+    combo:   { amp: 16 }
   };
+  var TAU = Math.PI * 2;
 
   function buildCandidates() {
     var c = { balloons: {}, popped: {} };
@@ -165,12 +167,14 @@
   function createBalloons(container, fxLayer, assets) {
     var raf = null;
     var last = 0;
+    var lastRafAt = 0;          /* detects stalled rAF (degraded contexts) */
     var items = [];
     var frozen = false;
 
     /* Question flight config (from levels.json via game.js). */
     var limitSec = 24;
     var swayProfile = SWAY.float;
+    var swayAmp = 8;            /* desktop breeze amplitude (px) */
     var mode = 'idle';          /* idle | fly | escape */
     var elapsed = 0;            /* THE authoritative play clock (seconds) */
     var lastClockAt = 0;        /* performance.now of the last clock tick */
@@ -178,13 +182,19 @@
     var escapeResolve = null;
     var escapeTimer = null;
     var startHoldTimer = null;
-    var bandTop = 0.16;         /* rise band as fractions of area height */
-    var bandBottom = 0.82;
+    var riseStartY = 0;         /* group rise band in px (body-aware) */
+    var riseEndY = 0;
     var swayX = 26;
+    var areaCache = null;       /* geometry cache: no layout reads per frame */
 
     function rect() {
       var r = container.getBoundingClientRect();
       return { w: r.width, h: r.height };
+    }
+
+    function areaRect() {
+      if (!areaCache) areaCache = rect();
+      return areaCache;
     }
 
     function aspectFor(color) {
@@ -283,6 +293,14 @@
       var clusterW = Math.min(area.w, ULTRAWIDE_CLUSTER);
       var clusterOff = (area.w - clusterW) / 2;
 
+      /* Body-aware rise band: the clickable inflated body starts fully
+         visible at the bottom and stays fully visible at the deadline
+         (the string may dip below, the crown never clips above). */
+      var bodyHalf = size * 0.72; /* artwork half-height (2:3 aspect) */
+      riseEndY = bodyHalf + 2;
+      riseStartY = Math.max(riseEndY + 60, area.h - bodyHalf - 4);
+      swayAmp = swayProfile.amp * (area.w < 620 ? 0.55 : 1);
+
       options.forEach(function (opt, i) {
         var aspect = aspectFor(opt.color);
         var el = document.createElement('div');
@@ -322,21 +340,23 @@
           anchor: {
             x: clusterOff + slot.x * clusterW,
             nx: slot.x,
-            band: slot.y,           /* starting band within the rise span */
-            nxBand: slot.y
+            nyRow: slot.y - 0.78 /* normalized row offset for stagger */
           },
+          rowOff: (slot.y - 0.78) * area.h * 0.4, /* gentle stagger between rows */
           size: size,
           aspect: aspect,
           phase: Math.random() * Math.PI * 2,
-          swayFreq: swayProfile.freq * (0.85 + Math.random() * 0.3) * (0.6 + swaySpeed / 70),
-          tiltFreq: 0.5 + Math.random() * 0.3,
+          /* Gentle breeze: one full sway cycle per ~3.5-5s (slightly
+             brisker on higher levels), one tilt cycle per ~6-9s. */
+          swayW: TAU / ((4.6 - (swaySpeed / 56) * 1.2) * (0.9 + Math.random() * 0.25)),
+          rotW: TAU / (6 + Math.random() * 3),
           disabled: false,
           popped: false,
           _timers: []
         };
         items.push(item);
         /* Position BEFORE attaching: no first frame at (0,0). */
-        placeAtSpawn(item, area);
+        placeAtSpawn(item);
         container.appendChild(el);
 
         /* Polished entrance: identical fade + rise for every balloon
@@ -354,6 +374,7 @@
       });
 
       computeSway();
+      areaCache = area;
       last = performance.now();
 
       /* Short reading/entrance hold before the countdown and the rise
@@ -369,74 +390,79 @@
       if (raf === null) raf = requestAnimationFrame(tick);
     }
 
-    /* Apply the fly-frame for time renderT: group rise + sway + tilt. */
-    function applyFlyPositions(renderT, area) {
+    /* Apply the fly-frame for time renderT: linear group rise (subpixel,
+     * no rounding stair-step) + gentle sway + subtle tilt. */
+    function applyFlyPositions(renderT) {
       var p = Math.min(1, renderT / limitSec);
-      var topY = bandTop * area.h;
-      var bottomY = bandBottom * area.h;
-      var groupY = bottomY + (topY - bottomY) * p; /* linear: 50% time = 50% travel */
-      var motionAmp = reducedMotion ? 0.5 : 1;
+      var groupY = riseStartY + (riseEndY - riseStartY) * p; /* 50% time = 50% travel */
+      var amp = Math.min(swayAmp, swayX) * (reducedMotion ? 0.5 : 1);
+      var rotAmp = 1.6 * (reducedMotion ? 0.5 : 1);
       items.forEach(function (item) {
         if (item.popped || item.disabled || !item.el) return;
-        var y = groupY - (item.anchor.band - 0.80) * area.h * 0.5; /* keep row stagger */
+        var y = groupY + item.rowOff;
         item.y = y;
+        /* x anchor is static: rounded once; y stays subpixel for smooth
+         * vertical motion at any refresh rate. */
         item.el.style.transform =
           'translate3d(' + Math.round(item.anchor.x - item.size / 2) + 'px,' +
-          Math.round(y - item.size * item.aspect / 2) + 'px,0)';
-        var sway = Math.sin(renderT * item.swayFreq * Math.PI + item.phase) *
-          Math.min(swayProfile.amp, swayX) * motionAmp;
-        var tilt = Math.sin(renderT * item.tiltFreq * Math.PI + item.phase * 0.7) * 2.4 * motionAmp;
+          (y - item.size * item.aspect / 2).toFixed(2) + 'px,0)';
+        var sway = Math.sin(renderT * item.swayW + item.phase) * amp;
+        var tilt = Math.sin(renderT * item.rotW + item.phase * 0.7) * rotAmp;
         item.inner.style.transform =
-          'translateX(' + sway.toFixed(1) + 'px) rotate(' + tilt.toFixed(2) + 'deg)';
+          'translateX(' + sway.toFixed(2) + 'px) rotate(' + tilt.toFixed(2) + 'deg)';
       });
     }
 
     /* The game loop (interval) advances the authoritative clock; the rAF
-       only renders, interpolating between clock ticks for 60fps
-       smoothness. The clock tick also applies positions directly, so the
-       game stays correct even where rAF is throttled. Freeze/pause stop
-       the interval, so everything halts together. */
+       is the sole renderer while it runs (interpolating between clock
+       ticks for smoothness at any FPS). Only when rAF is detected as
+       stalled (throttled background contexts) does the clock tick also
+       apply positions, so the game stays correct everywhere. */
     function advanceClock(ms) {
       if (mode === 'fly' && !frozen) {
         elapsed += ms / 1000;
         lastClockAt = performance.now();
-        applyFlyPositions(elapsed, rect());
+        /* Degraded context (rAF stalled): the clock tick keeps the game
+           rendering. When rAF is healthy it stays the sole writer. */
+        if (performance.now() - lastRafAt > 250) {
+          applyFlyPositions(elapsed);
+        }
       }
     }
 
-    function placeAtSpawn(item, area) {
-      var y = item.anchor.band * area.h;
+    function placeAtSpawn(item) {
+      var y = riseStartY + item.rowOff;
       item.y = y;
       item.el.style.transform =
         'translate3d(' + Math.round(item.anchor.x - item.size / 2) + 'px,' +
-        Math.round(y - item.size * item.aspect / 2) + 'px,0)';
+        (y - item.size * item.aspect / 2).toFixed(2) + 'px,0)';
     }
 
     function tick(now) {
       raf = requestAnimationFrame(tick);
+      lastRafAt = now;
       var dt = (now - last) / 1000;
       last = now;
       if (dt < 0) dt = 0;
       if (dt > 0.05) dt = 0.05; /* frame-drop guard: no teleporting */
       if (frozen) return;
 
-      var area = rect();
-
       if (mode === 'fly') {
         /* Render time = authoritative clock + smooth interpolation
            toward the next tick (capped at one tick). */
-        var since = frozen ? 0 : Math.min(0.12, (now - lastClockAt) / 1000);
-        applyFlyPositions(elapsed + since, area);
+        var since = Math.min(0.12, (now - lastClockAt) / 1000);
+        applyFlyPositions(elapsed + since);
       } else if (mode === 'escape') {
         escapeT += dt;
+        var area = areaRect();
         var escapeSpeed = Math.max(420, area.h * 0.9); /* px/s */
         items.forEach(function (item) {
           if (!item.el || item.popped || item.disabled) return;
-          if (item.y === undefined) item.y = item.anchor.band * area.h;
+          if (item.y === undefined) item.y = riseStartY + item.rowOff;
           item.y -= escapeSpeed * dt;
           item.el.style.transform =
             'translate3d(' + Math.round(item.anchor.x - item.size / 2) + 'px,' +
-            Math.round(item.y - item.size * item.aspect / 2) + 'px,0)';
+            (item.y - item.size * item.aspect / 2).toFixed(2) + 'px,0)';
         });
         if (escapeT > 0.9 && escapeResolve) {
           escapeResolve();
@@ -605,31 +631,53 @@
 
     /* ---- layout maintenance ---- */
 
+    /* Deterministic formation (no shuffle) - used by relayout so an
+       orientation change re-grids the balloons for the new shape without
+       resetting the question or its rise progress. */
+    function formationFor(count, area) {
+      var slots = slotsFor(count, area);
+      slots.sort(function (p, q) { return p.x - q.x; }); /* stable order */
+      return slots;
+    }
+
     function relayout() {
       var area = rect();
       if (!items.length) return;
+      areaCache = area;
       var size = sizeFor(area, items.length);
       var clusterW = Math.min(area.w, ULTRAWIDE_CLUSTER);
       var clusterOff = (area.w - clusterW) / 2;
-      items.forEach(function (item) {
+      /* Re-grid the formation for the current orientation (portrait 2x2 /
+         3+2 vs landscape single row), keeping each balloon's slot order. */
+      var slots = formationFor(items.length, area);
+      items.forEach(function (item, i) {
         if (item.popped || !item.el) return;
-        item.anchor.x = clusterOff + item.anchor.nx * clusterW;
+        var slot = slots[i];
+        item.anchor.nx = slot.x;
+        item.anchor.nyRow = slot.y - 0.78;
+        item.anchor.x = clusterOff + slot.x * clusterW;
         item.size = size;
         item.aspect = aspectFor(item.color);
+        item.rowOff = item.anchor.nyRow * area.h * 0.4;
         item.el.style.width = size + 'px';
         item.el.style.height = Math.round(size * item.aspect) + 'px';
         var lbl = item.inner.querySelector('.balloon-label');
         if (lbl) lbl.style.fontSize = labelFontSize(item.text, size) + 'px';
       });
+      /* Recompute the rise band for the new geometry. */
+      var bodyHalf = size * 0.72; /* artwork half-height (2:3 aspect) */
+      riseEndY = bodyHalf + 2;
+      riseStartY = Math.max(riseEndY + 60, area.h - bodyHalf - 4);
+      swayAmp = swayProfile.amp * (area.w < 620 ? 0.55 : 1);
       computeSway();
       /* Re-place immediately at the current progress so no balloon
          shifts sideways or teleports after a resize. */
       if (mode === 'fly') {
-        applyFlyPositions(elapsed, area);
+        applyFlyPositions(elapsed);
       } else if (mode !== 'escape') {
         items.forEach(function (item) {
           if (item.popped || !item.el) return;
-          placeAtSpawn(item, area);
+          placeAtSpawn(item);
         });
       }
     }
