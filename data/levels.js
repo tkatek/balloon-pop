@@ -18,12 +18,12 @@
       "q004",
       "q005"
     ],
-    "timeLimitSeconds": null,
+    "timeLimitSeconds": 24,
     "choiceCount": 4,
     "movementPattern": "float",
     "movementSpeed": 14,
     "bossQuestionId": "q005",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 1,
     "reward": {
       "first": {
@@ -46,12 +46,12 @@
       "q009",
       "q010"
     ],
-    "timeLimitSeconds": null,
+    "timeLimitSeconds": 24,
     "choiceCount": 4,
     "movementPattern": "float",
     "movementSpeed": 16,
     "bossQuestionId": "q010",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 1,
     "reward": {
       "first": {
@@ -74,12 +74,12 @@
       "q014",
       "q015"
     ],
-    "timeLimitSeconds": null,
+    "timeLimitSeconds": 24,
     "choiceCount": 4,
     "movementPattern": "float",
     "movementSpeed": 18,
     "bossQuestionId": "q015",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 1,
     "reward": {
       "first": {
@@ -102,12 +102,12 @@
       "q019",
       "q020"
     ],
-    "timeLimitSeconds": 40,
+    "timeLimitSeconds": 22,
     "choiceCount": 5,
     "movementPattern": "drift",
     "movementSpeed": 26,
     "bossQuestionId": "q020",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 2,
     "reward": {
       "first": {
@@ -130,12 +130,12 @@
       "q024",
       "q025"
     ],
-    "timeLimitSeconds": 38,
+    "timeLimitSeconds": 22,
     "choiceCount": 5,
     "movementPattern": "drift",
     "movementSpeed": 28,
     "bossQuestionId": "q025",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 2,
     "reward": {
       "first": {
@@ -158,12 +158,12 @@
       "q029",
       "q030"
     ],
-    "timeLimitSeconds": 38,
+    "timeLimitSeconds": 22,
     "choiceCount": 5,
     "movementPattern": "drift",
     "movementSpeed": 30,
     "bossQuestionId": "q030",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 2,
     "reward": {
       "first": {
@@ -186,12 +186,12 @@
       "q034",
       "q035"
     ],
-    "timeLimitSeconds": 36,
+    "timeLimitSeconds": 20,
     "choiceCount": 5,
     "movementPattern": "wave",
     "movementSpeed": 36,
     "bossQuestionId": "q035",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 3,
     "reward": {
       "first": {
@@ -214,12 +214,12 @@
       "q039",
       "q040"
     ],
-    "timeLimitSeconds": 36,
+    "timeLimitSeconds": 20,
     "choiceCount": 5,
     "movementPattern": "wave",
     "movementSpeed": 38,
     "bossQuestionId": "q040",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 3,
     "reward": {
       "first": {
@@ -242,12 +242,12 @@
       "q044",
       "q045"
     ],
-    "timeLimitSeconds": 35,
+    "timeLimitSeconds": 20,
     "choiceCount": 5,
     "movementPattern": "wave",
     "movementSpeed": 40,
     "bossQuestionId": "q045",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 3,
     "reward": {
       "first": {
@@ -270,12 +270,12 @@
       "q049",
       "q050"
     ],
-    "timeLimitSeconds": 35,
+    "timeLimitSeconds": 19,
     "choiceCount": 5,
     "movementPattern": "stagger",
     "movementSpeed": 42,
     "bossQuestionId": "q050",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 3,
     "reward": {
       "first": {
@@ -298,12 +298,12 @@
       "q054",
       "q055"
     ],
-    "timeLimitSeconds": 34,
+    "timeLimitSeconds": 19,
     "choiceCount": 5,
     "movementPattern": "stagger",
     "movementSpeed": 44,
     "bossQuestionId": "q055",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 3,
     "reward": {
       "first": {
@@ -326,12 +326,12 @@
       "q059",
       "q060"
     ],
-    "timeLimitSeconds": 34,
+    "timeLimitSeconds": 19,
     "choiceCount": 5,
     "movementPattern": "stagger",
     "movementSpeed": 46,
     "bossQuestionId": "q060",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 4,
     "reward": {
       "first": {
@@ -354,12 +354,12 @@
       "q064",
       "q065"
     ],
-    "timeLimitSeconds": 34,
+    "timeLimitSeconds": 19,
     "choiceCount": 5,
     "movementPattern": "combo",
     "movementSpeed": 50,
     "bossQuestionId": "q065",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 4,
     "reward": {
       "first": {
@@ -382,12 +382,12 @@
       "q069",
       "q070"
     ],
-    "timeLimitSeconds": 32,
+    "timeLimitSeconds": 19,
     "choiceCount": 5,
     "movementPattern": "combo",
     "movementSpeed": 52,
     "bossQuestionId": "q070",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 4,
     "reward": {
       "first": {
@@ -410,12 +410,12 @@
       "q074",
       "q075"
     ],
-    "timeLimitSeconds": 32,
+    "timeLimitSeconds": 19,
     "choiceCount": 5,
     "movementPattern": "combo",
     "movementSpeed": 56,
     "bossQuestionId": "q075",
-    "bossBonusSeconds": 5,
+    "bossBonusSeconds": 4,
     "difficulty": 5,
     "reward": {
       "first": {

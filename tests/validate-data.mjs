@@ -115,11 +115,13 @@ levels.forEach(lv => {
   ok(idSet.has(lv.bossQuestionId), `${lv.id}: boss question missing`);
 });
 
-/* 13. timers valid */
+/* 13. timers valid: every level is an escape race, 15-30s */
 levels.forEach(lv => {
   const t = lv.timeLimitSeconds;
-  ok(t === null || (Number.isInteger(t) && t >= 30 && t <= 45),
+  ok(t !== null && Number.isInteger(t) && t >= 15 && t <= 30,
     `${lv.id}: invalid timeLimitSeconds ${t}`);
+  ok(Number.isInteger(lv.bossBonusSeconds) && lv.bossBonusSeconds >= 3 && lv.bossBonusSeconds <= 6,
+    `${lv.id}: invalid bossBonusSeconds`);
   ok(typeof lv.movementSpeed === 'number' && lv.movementSpeed >= 10 && lv.movementSpeed <= 70,
     `${lv.id}: movementSpeed out of range`);
   ok(['float', 'drift', 'wave', 'stagger', 'combo'].includes(lv.movementPattern),
@@ -130,10 +132,9 @@ levels.forEach(lv => {
 levels.forEach((lv, i) => {
   ok(lv.id === 'L' + String(i + 1).padStart(2, '0'), `level order wrong at index ${i} (${lv.id})`);
 });
-ok(levels[0].timeLimitSeconds === null, 'level 1 must be untimed');
-ok(levels.slice(0, 3).every(l => l.timeLimitSeconds === null), 'levels 1-3 untimed');
-const timed = levels.filter(l => l.timeLimitSeconds !== null).map(l => l.timeLimitSeconds);
-ok(timed.every((v, i) => i === 0 || v <= timed[i - 1]), 'timers must not increase across levels');
+ok(levels[0].timeLimitSeconds !== null, 'level 1 must be timed (escape race)');
+const times = levels.map(l => l.timeLimitSeconds);
+ok(times.every((v, i) => i === 0 || v <= times[i - 1]), 'timers must not increase across levels');
 
 /* correct-answer position distribution (spec: spread across positions) */
 levels.forEach(lv => {

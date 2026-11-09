@@ -1,8 +1,15 @@
-/* Balloon Pop - Balloon engine: asset detection, responsive layout,
-   movement patterns (requestAnimationFrame + delta time), pop animation
-   and particles. All movement is transform-based; balloons are clamped
-   to the safe play area and never overlap the question card or HUD
-   because #play-area is a dedicated flex region between them. */
+/* Balloon Pop - Rising balloon engine.
+   Balloons spawn in the lower part of the safe play area and rise as one
+   coordinated group; the rise is a linear function of the field's single
+   authoritative play clock, so 50% of the time always equals ~50% of the
+   travel. Sway and tilt live on a separate inner wrapper so they never
+   fight the position transform; pops and entrances animate the inner
+   wrapper as well.
+
+   Layered structure per balloon:
+     .balloon       (position wrapper: translate3d from rAF, hitbox)
+       .balloon-inner (sway + tilt + pop animations)
+         img.balloon-img / span.balloon-label                        */
 (function (root) {
   'use strict';
 
@@ -32,6 +39,17 @@
     }
   };
   var BURST_SCALE = 1.15; /* burst slightly larger than the body diameter */
+
+  /* Sway amplitude (px) and frequency character per movement pattern.
+     The pattern comes from levels.json; all balloons share the same rise,
+     only lateral breeze differs - never a per-answer speed boost. */
+  var SWAY = {
+    float:   { amp: 9,  freq: 0.55 },
+    drift:   { amp: 14, freq: 0.70 },
+    wave:    { amp: 20, freq: 0.90 },
+    stagger: { amp: 26, freq: 1.10 },
+    combo:   { amp: 32, freq: 1.30 }
+  };
 
   function buildCandidates() {
     var c = { balloons: {}, popped: {} };
@@ -147,13 +165,22 @@
   function createBalloons(container, fxLayer, assets) {
     var raf = null;
     var last = 0;
-    var t = 0;                 /* accumulated animation time (s), frozen-aware */
-    var items = [];            /* live balloons */
+    var items = [];
     var frozen = false;
-    var pattern = 'float';
-    var speed = 30;            /* px/s reference */
-    var running = false;
-    var swayX = 26;            /* max horizontal drift so balloons never collide */
+
+    /* Question flight config (from levels.json via game.js). */
+    var limitSec = 24;
+    var swayProfile = SWAY.float;
+    var mode = 'idle';          /* idle | fly | escape */
+    var elapsed = 0;            /* THE authoritative play clock (seconds) */
+    var lastClockAt = 0;        /* performance.now of the last clock tick */
+    var escapeT = 0;
+    var escapeResolve = null;
+    var escapeTimer = null;
+    var startHoldTimer = null;
+    var bandTop = 0.16;         /* rise band as fractions of area height */
+    var bandBottom = 0.82;
+    var swayX = 26;
 
     function rect() {
       var r = container.getBoundingClientRect();
@@ -164,19 +191,15 @@
       return assets.aspects && assets.aspects[color] ? assets.aspects[color] : 1.18;
     }
 
-    /* Balloon body width from the real playable rectangle.
-       Desktop targets 145-220px bodies; phones 88-125px; height follows
-       the real image aspect (width * aspect). */
     function sizeFor(area, count) {
-      var landscape = area.w / area.h >= 0.95;
       var aspect = 1.5; /* dominant real-asset aspect */
       var cols, rows;
-      if (landscape) { cols = count; rows = 1; }
+      if (area.w / area.h >= 0.95) { cols = count; rows = 1; }
       else { rows = 2; cols = count === 5 ? 3 : 2; }
 
       var clusterW = Math.min(area.w, ULTRAWIDE_CLUSTER) * 0.92;
       var byW = clusterW / cols;
-      var byH = (area.h * 0.94) / rows / aspect;
+      var byH = (area.h * 0.62) / rows / aspect; /* fit inside the rise band */
 
       var cap = count >= 5 ? 195 : 220;
       var s = Math.min(byW, byH, cap);
@@ -186,29 +209,29 @@
       return Math.max(64, Math.round(s));
     }
 
-    /* Normalized anchor slots for the given count. Portrait uses a
+    /* Starting slots inside the LOWER part of the area. Portrait uses a
        staggered formation (triangle for 3, 2+2, 3+2); landscape is one
        row inside a centered cluster so ultrawide screens stay balanced. */
     function slotsFor(count, area) {
       var landscape = area.w / area.h >= 0.95;
       var slots = [];
       if (landscape) {
-        for (var i = 0; i < count; i++) slots.push({ x: (i + 0.5) / count, y: 0.52 });
+        for (var i = 0; i < count; i++) slots.push({ x: (i + 0.5) / count, y: 0.80 });
       } else if (count === 3) {
-        slots.push({ x: 0.5, y: 0.30 });
-        slots.push({ x: 0.26, y: 0.73 });
-        slots.push({ x: 0.74, y: 0.73 });
+        slots.push({ x: 0.5, y: 0.66 });
+        slots.push({ x: 0.26, y: 0.90 });
+        slots.push({ x: 0.74, y: 0.90 });
       } else if (count === 4) {
-        slots.push({ x: 0.26, y: 0.30 });
-        slots.push({ x: 0.74, y: 0.30 });
-        slots.push({ x: 0.26, y: 0.73 });
-        slots.push({ x: 0.74, y: 0.73 });
+        slots.push({ x: 0.26, y: 0.66 });
+        slots.push({ x: 0.74, y: 0.66 });
+        slots.push({ x: 0.26, y: 0.90 });
+        slots.push({ x: 0.74, y: 0.90 });
       } else {
-        slots.push({ x: 0.18, y: 0.28 });
-        slots.push({ x: 0.5, y: 0.28 });
-        slots.push({ x: 0.82, y: 0.28 });
-        slots.push({ x: 0.33, y: 0.74 });
-        slots.push({ x: 0.67, y: 0.74 });
+        slots.push({ x: 0.18, y: 0.64 });
+        slots.push({ x: 0.5, y: 0.64 });
+        slots.push({ x: 0.82, y: 0.64 });
+        slots.push({ x: 0.33, y: 0.90 });
+        slots.push({ x: 0.67, y: 0.90 });
       }
       /* Shuffle slot assignment so answers are positionally fair. */
       for (var k = slots.length - 1; k > 0; k--) {
@@ -218,22 +241,6 @@
       return slots;
     }
 
-    /* Horizontal sway budget: half the gap between horizontally adjacent
-       balloons, minus a margin. Clamping drift to this keeps balloons
-       from ever overlapping during movement, not just at spawn. */
-    function computeSway() {
-      var minDx = Infinity;
-      for (var a = 0; a < items.length; a++) {
-        for (var b = a + 1; b < items.length; b++) {
-          var dy = Math.abs(items[a].anchor.y - items[b].anchor.y);
-          if (dy < items[a].size * 0.8) {
-            minDx = Math.min(minDx, Math.abs(items[a].anchor.x - items[b].anchor.x));
-          }
-        }
-      }
-      swayX = isFinite(minDx) ? Math.max(5, (minDx - items[0].size) / 2 - 8) : 40;
-    }
-
     function labelClass(text) {
       var n = text.length;
       if (n <= 6) return 'len-s';
@@ -241,29 +248,40 @@
       return 'len-l';
     }
 
-    /* Readable label at any balloon size: proportional but clamped, so
-       long answers on small phones never shrink below 15px. */
+    /* Readable label at any balloon size: proportional but clamped. */
     function labelFontSize(text, size) {
       var n = text.length;
       var f = n <= 6 ? size * 0.155 : (n <= 12 ? size * 0.125 : size * 0.105);
       return Math.max(15, Math.min(f, 34));
     }
 
+    /* Horizontal sway budget keeps balloons in separate vertical lanes. */
+    function computeSway() {
+      var minDx = Infinity;
+      for (var a = 0; a < items.length; a++) {
+        for (var b = a + 1; b < items.length; b++) {
+          var dx = Math.abs(items[a].anchor.x - items[b].anchor.x);
+          minDx = Math.min(minDx, dx);
+        }
+      }
+      swayX = isFinite(minDx) ? Math.max(5, (minDx - items[0].size) / 2 - 8) : 40;
+    }
+
     function spawn(options, opts) {
-      pattern = opts.pattern || 'float';
-      speed = opts.speed || 30;
+      mode = 'idle';
+      elapsed = 0;
+      escapeT = 0;
+      if (escapeTimer) { clearTimeout(escapeTimer); escapeTimer = null; }
+      if (startHoldTimer) { clearTimeout(startHoldTimer); startHoldTimer = null; }
+      limitSec = (opts && opts.limitSec) || 24;
+      swayProfile = SWAY[(opts && opts.pattern)] || SWAY.float;
+      var swaySpeed = (opts && opts.speed) || 30;
+
       var area = rect();
       var size = sizeFor(area, options.length);
       var slots = slotsFor(options.length, area);
-      if (area.w / area.h >= 0.95) {
-        /* Landscape: alternate gentle vertical offsets so a row of
-           balloons looks natural instead of mechanically aligned. */
-        slots.forEach(function (s, i) { s.y = i % 2 === 0 ? 0.47 : 0.58; });
-      }
       var clusterW = Math.min(area.w, ULTRAWIDE_CLUSTER);
       var clusterOff = (area.w - clusterW) / 2;
-      var amp = reducedMotion ? 0.55 : 1;
-      void amp;
 
       options.forEach(function (opt, i) {
         var aspect = aspectFor(opt.color);
@@ -276,19 +294,23 @@
         el.style.width = size + 'px';
         el.style.height = Math.round(size * aspect) + 'px';
 
+        var inner = document.createElement('div');
+        inner.className = 'balloon-inner';
+
         if (assets.balloons[opt.color]) {
           var img = document.createElement('img');
           img.className = 'balloon-img';
           img.alt = '';
           img.draggable = false;
           img.src = assets.balloons[opt.color];
-          el.appendChild(img);
+          inner.appendChild(img);
         }
         var label = document.createElement('span');
         label.className = 'balloon-label ' + labelClass(opt.text);
         label.textContent = opt.text;
         label.style.fontSize = labelFontSize(opt.text, size) + 'px';
-        el.appendChild(label);
+        inner.appendChild(label);
+        el.appendChild(inner);
 
         var slot = slots[i];
         var item = {
@@ -296,122 +318,131 @@
           color: opt.color,
           text: opt.text,
           el: el,
+          inner: inner,
           anchor: {
             x: clusterOff + slot.x * clusterW,
-            y: slot.y * area.h
+            nx: slot.x,
+            band: slot.y,           /* starting band within the rise span */
+            nxBand: slot.y
           },
           size: size,
           aspect: aspect,
           phase: Math.random() * Math.PI * 2,
-          freq: 0.75 + Math.random() * 0.5,
-          dir: i % 2 === 0 ? 1 : -1,
-          yOff: 0,
-          xOff: 0,
+          swayFreq: swayProfile.freq * (0.85 + Math.random() * 0.3) * (0.6 + swaySpeed / 70),
+          tiltFreq: 0.5 + Math.random() * 0.3,
           disabled: false,
           popped: false,
           _timers: []
         };
         items.push(item);
-        /* Position BEFORE attaching: the balloon can never paint a
-           single frame at the untranslated (0,0) spot. */
-        place(item);
+        /* Position BEFORE attaching: no first frame at (0,0). */
+        placeAtSpawn(item, area);
         container.appendChild(el);
 
-        /* Pop-in animation; timer-cancelled so a suspended animation
-           engine can never leave the balloon stuck at scale(0). */
+        /* Polished entrance: identical fade + rise for every balloon
+           (no scale-from-zero, no per-balloon size surprises). */
         try {
-          var popIn = el.animate(
-            [{ transform: buildTransform(item) + ' scale(0)', opacity: 0 }, { transform: buildTransform(item) + ' scale(1)', opacity: 1 }],
-            { duration: reducedMotion ? 1 : 380, delay: i * 70, easing: 'cubic-bezier(.34,1.56,.64,1)', fill: 'backwards' }
+          var enter = inner.animate(
+            [
+              { transform: 'translateY(30px)', opacity: 0 },
+              { transform: 'translateY(0px)', opacity: 1 }
+            ],
+            { duration: reducedMotion ? 1 : 380, easing: 'cubic-bezier(.25,.8,.35,1)', fill: 'backwards' }
           );
-          item._timers.push(setTimeout(function () { try { popIn.cancel(); } catch (e) { /* already finished */ } }, i * 70 + 460));
+          item._timers.push(setTimeout(function () { try { enter.cancel(); } catch (e) { } }, 460));
         } catch (e) { /* cosmetic only */ }
       });
 
       computeSway();
       last = performance.now();
-      if (!running) {
-        running = true;
-        raf = requestAnimationFrame(tick);
+
+      /* Short reading/entrance hold before the countdown and the rise
+         begin together (game.js treats field elapsed 0 as clock start). */
+      var hold = (opts && opts.holdMs) || 900;
+      startHoldTimer = setTimeout(function () {
+        startHoldTimer = null;
+        mode = 'fly';
+        last = performance.now();
+        lastClockAt = performance.now();
+      }, reducedMotion ? Math.min(hold, 300) : hold);
+
+      if (raf === null) raf = requestAnimationFrame(tick);
+    }
+
+    /* Apply the fly-frame for time renderT: group rise + sway + tilt. */
+    function applyFlyPositions(renderT, area) {
+      var p = Math.min(1, renderT / limitSec);
+      var topY = bandTop * area.h;
+      var bottomY = bandBottom * area.h;
+      var groupY = bottomY + (topY - bottomY) * p; /* linear: 50% time = 50% travel */
+      var motionAmp = reducedMotion ? 0.5 : 1;
+      items.forEach(function (item) {
+        if (item.popped || item.disabled || !item.el) return;
+        var y = groupY - (item.anchor.band - 0.80) * area.h * 0.5; /* keep row stagger */
+        item.y = y;
+        item.el.style.transform =
+          'translate3d(' + Math.round(item.anchor.x - item.size / 2) + 'px,' +
+          Math.round(y - item.size * item.aspect / 2) + 'px,0)';
+        var sway = Math.sin(renderT * item.swayFreq * Math.PI + item.phase) *
+          Math.min(swayProfile.amp, swayX) * motionAmp;
+        var tilt = Math.sin(renderT * item.tiltFreq * Math.PI + item.phase * 0.7) * 2.4 * motionAmp;
+        item.inner.style.transform =
+          'translateX(' + sway.toFixed(1) + 'px) rotate(' + tilt.toFixed(2) + 'deg)';
+      });
+    }
+
+    /* The game loop (interval) advances the authoritative clock; the rAF
+       only renders, interpolating between clock ticks for 60fps
+       smoothness. The clock tick also applies positions directly, so the
+       game stays correct even where rAF is throttled. Freeze/pause stop
+       the interval, so everything halts together. */
+    function advanceClock(ms) {
+      if (mode === 'fly' && !frozen) {
+        elapsed += ms / 1000;
+        lastClockAt = performance.now();
+        applyFlyPositions(elapsed, rect());
       }
     }
 
-    function buildTransform(item) {
-      var x = item.anchor.x + item.xOff;
-      var y = item.anchor.y + item.yOff;
-      var hw = item.size / 2;
-      var hh = item.size * item.aspect / 2;
-      return 'translate3d(' + Math.round(x - hw) + 'px,' + Math.round(y - hh) + 'px,0)';
-    }
-
-    function place(item) {
-      item.el.style.transform = buildTransform(item);
-    }
-
-    function clampToArea(item) {
-      var area = rect();
-      var hw = item.size / 2;
-      var hh = item.size * item.aspect / 2;
-      var cx = item.anchor.x + item.xOff;
-      var cy = item.anchor.y + item.yOff;
-      var maxX = area.w - hw - 4;
-      var minX = hw + 4;
-      var maxY = area.h - hh - 2;
-      var minY = hh + 2;
-      if (cx !== Math.min(Math.max(cx, minX), maxX)) {
-        item.xOff += Math.min(Math.max(cx, minX), maxX) - cx;
-      }
-      if (cy !== Math.min(Math.max(cy, minY), maxY)) {
-        item.yOff += Math.min(Math.max(cy, minY), maxY) - cy;
-      }
+    function placeAtSpawn(item, area) {
+      var y = item.anchor.band * area.h;
+      item.y = y;
+      item.el.style.transform =
+        'translate3d(' + Math.round(item.anchor.x - item.size / 2) + 'px,' +
+        Math.round(y - item.size * item.aspect / 2) + 'px,0)';
     }
 
     function tick(now) {
       raf = requestAnimationFrame(tick);
       var dt = (now - last) / 1000;
       last = now;
-      if (dt > 0.05) dt = 0.05; /* frame-drop guard keeps motion predictable */
+      if (dt < 0) dt = 0;
+      if (dt > 0.05) dt = 0.05; /* frame-drop guard: no teleporting */
       if (frozen) return;
-      t += dt;
-      var area = rect();
-      var amp = reducedMotion ? 0.55 : 1;
 
-      items.forEach(function (item) {
-        if (item.popped || item.disabled) return;
-        var aH = Math.min(area.h * 0.14, 42) * amp;
-        var aW = Math.min(area.w * 0.05, 24) * amp;
-        switch (pattern) {
-          case 'float':
-            item.xOff = Math.sin(t * item.freq + item.phase) * 8 * amp;
-            item.yOff = Math.sin(t * item.freq * 0.8 + item.phase * 1.3) * 7 * amp;
-            break;
-          case 'drift':
-            item.xOff = Math.sin(t * item.freq * 0.6 + item.phase) * aW;
-            item.yOff = Math.sin(t * item.freq + item.phase) * aH;
-            break;
-          case 'wave':
-            item.xOff = Math.sin(t * (0.5 + item.freq * 0.5) + item.phase) * (aW * 1.7);
-            item.yOff = Math.sin(t * item.freq + item.phase * 1.7) * aH;
-            break;
-          case 'stagger':
-            item.yOff += item.dir * speed * dt * amp;
-            if (item.yOff > aH) { item.yOff = aH; item.dir = -1; }
-            if (item.yOff < -aH) { item.yOff = -aH; item.dir = 1; }
-            item.xOff = Math.sin(t * item.freq * 0.9 + item.phase) * aW;
-            break;
-          case 'combo':
-            item.yOff += item.dir * speed * 1.15 * dt * amp;
-            if (item.yOff > aH) { item.yOff = aH; item.dir = -1; }
-            if (item.yOff < -aH) { item.yOff = -aH; item.dir = 1; }
-            item.xOff = Math.sin(t * (0.65 + item.freq * 0.6) + item.phase) * (aW * 1.9);
-            break;
+      var area = rect();
+
+      if (mode === 'fly') {
+        /* Render time = authoritative clock + smooth interpolation
+           toward the next tick (capped at one tick). */
+        var since = frozen ? 0 : Math.min(0.12, (now - lastClockAt) / 1000);
+        applyFlyPositions(elapsed + since, area);
+      } else if (mode === 'escape') {
+        escapeT += dt;
+        var escapeSpeed = Math.max(420, area.h * 0.9); /* px/s */
+        items.forEach(function (item) {
+          if (!item.el || item.popped || item.disabled) return;
+          if (item.y === undefined) item.y = item.anchor.band * area.h;
+          item.y -= escapeSpeed * dt;
+          item.el.style.transform =
+            'translate3d(' + Math.round(item.anchor.x - item.size / 2) + 'px,' +
+            Math.round(item.y - item.size * item.aspect / 2) + 'px,0)';
+        });
+        if (escapeT > 0.9 && escapeResolve) {
+          escapeResolve();
+          escapeResolve = null;
         }
-        /* Clamp horizontal drift so balloons never drift into a
-           neighbour's space, whatever the movement pattern. */
-        item.xOff = Math.max(-swayX, Math.min(swayX, item.xOff));
-        clampToArea(item);
-        place(item);
-      });
+      }
     }
 
     /* ---- interactions ---- */
@@ -449,16 +480,15 @@
       }
     }
 
-    /* Pop a balloon: squash -> popped image (or CSS burst) -> fade.
-       Resolution is timer-backed: WAAPI onfinish can be delayed or never
-       fire in throttled/non-painting contexts, and gameplay must never
-       hang on an animation. */
+    /* Pop a balloon: tiny scale pulse -> popped image (or CSS burst) ->
+       fade -> remove. Everything animates the inner wrapper, so the
+       position transform is never touched. Timer-backed fallbacks keep
+       gameplay moving even if WAAPI is throttled. */
     function pop(id, correct) {
       return new Promise(function (resolve) {
         var item = byId(id);
         if (!item || item.popped) { resolve(null); return; }
         item.popped = true;
-        item.el.classList.add('popping');
         item.el.style.pointerEvents = 'none';
         var r = item.el.getBoundingClientRect();
         var cr = container.getBoundingClientRect();
@@ -471,17 +501,16 @@
           done = true;
           var poppedSrc = assets.popped[item.color];
           if (poppedSrc) {
-            var img = item.el.querySelector('.balloon-img');
+            var img = item.inner.querySelector('.balloon-img');
             if (!img) {
               img = document.createElement('img');
               img.className = 'balloon-img';
               img.alt = '';
-              item.el.prepend(img);
+              item.inner.prepend(img);
             }
             img.src = poppedSrc;
-            /* Scale the burst so its VISIBLE artwork matches the inflated
-               body's visual diameter (the popped PNGs have a different
-               aspect and their own transparent padding). */
+            /* Scale the burst so its VISIBLE artwork matches the
+               inflated body's visual diameter. */
             var nv = (VIS.normal[item.color] || { w: 0.9, cx: 0.5, cy: 0.5 });
             var pv = (VIS.popped[item.color] || { w: 0.9, cx: 0.5, cy: 0.5 });
             var iw = img.naturalWidth || 1;
@@ -495,26 +524,21 @@
             img.style.top = (elH * nv.cy - pv.cy * drawH) + 'px';
             img.style.width = drawW + 'px';
             img.style.height = drawH + 'px';
-            img.style.objectFit = 'fill'; /* drawW/drawH already match the aspect */
+            img.style.objectFit = 'fill';
             item.el.classList.add('popped-img');
           } else {
             item.el.classList.add('popped-css');
           }
-          item.el.classList.remove('popping');
+          item.inner.classList.add('burst');
           particles(cx, cy, item.color, correct);
-          /* Fade runs right away (no delay gap where the burst could
-             blink invisible: the previous inline-opacity approach fought
-             the animation's start delay). */
           try {
-            item.el.animate(
+            item.inner.animate(
               [{ opacity: 1 }, { opacity: 0 }],
               { duration: 620, delay: 120, fill: 'forwards', easing: 'ease-out' }
             );
           } catch (e) { /* cosmetic only */ }
-          /* Timer-backed fallbacks: hide then fully remove the popped
-             balloon. Tracked so a question change cancels them. */
           item._timers.push(setTimeout(function () {
-            if (item.el) item.el.style.opacity = '0';
+            if (item.inner) item.inner.style.opacity = '0';
           }, 740));
           item._timers.push(setTimeout(function () {
             if (item.el) { item.el.remove(); item.el = null; }
@@ -522,25 +546,24 @@
           setTimeout(resolve, correct ? 300 : 420);
         };
 
-        var anim = null;
+        /* Tiny, natural scale pulse on the inner wrapper only - no
+           horizontal squash of the position layer. */
         try {
-          anim = item.el.animate(
+          var squash = item.inner.animate(
             [
-              { transform: item.el.style.transform + ' scale(1)', offset: 0 },
-              { transform: item.el.style.transform + ' scale(1.18,0.82)', offset: 0.3 },
-              { transform: item.el.style.transform + ' scale(0.9,1.1)', offset: 0.6 },
-              { transform: item.el.style.transform + ' scale(1)', offset: 1 }
+              { transform: item.inner.style.transform + ' scale(1)', offset: 0 },
+              { transform: item.inner.style.transform + ' scale(1.07)', offset: 0.45 },
+              { transform: item.inner.style.transform + ' scale(0.96)', offset: 1 }
             ],
-            { duration: reducedMotion ? 1 : 140, easing: 'ease-out' }
+            { duration: reducedMotion ? 1 : 120, easing: 'ease-out' }
           );
-          anim.onfinish = finish;
+          squash.onfinish = finish;
         } catch (e) { /* cosmetic only */ }
-
-        item._timers.push(setTimeout(finish, (reducedMotion ? 1 : 140) + 80)); /* fallback */
+        item._timers.push(setTimeout(finish, (reducedMotion ? 1 : 120) + 70));
       });
     }
 
-    /* Remove wrong options via 50/50: fizzle out. */
+    /* Remove wrong options via 50/50: fizzle out, flight continues. */
     function fizzle(id) {
       var item = byId(id);
       if (!item || item.popped || item.disabled) return;
@@ -552,7 +575,6 @@
       particles(r.left - cr.left + r.width / 2, r.top - cr.top + r.height / 2, item.color, false);
     }
 
-    /* Disable a wrongly-picked balloon; keep remnant visible. */
     function disable(id) {
       var item = byId(id);
       if (!item) return;
@@ -566,6 +588,23 @@
       last = performance.now();
     }
 
+    /* Timeout: remaining balloons rise out through the top together. */
+    function escape() {
+      return new Promise(function (res) {
+        if (mode !== 'fly') { res(); return; }
+        mode = 'escape';
+        escapeT = 0;
+        escapeResolve = res;
+        /* Hard fallback so gameplay never waits on a stalled rAF. */
+        escapeTimer = setTimeout(function () {
+          escapeTimer = null;
+          if (escapeResolve) { var r2 = escapeResolve; escapeResolve = null; r2(); }
+        }, 1100);
+      });
+    }
+
+    /* ---- layout maintenance ---- */
+
     function relayout() {
       var area = rect();
       if (!items.length) return;
@@ -573,42 +612,41 @@
       var clusterW = Math.min(area.w, ULTRAWIDE_CLUSTER);
       var clusterOff = (area.w - clusterW) / 2;
       items.forEach(function (item) {
-        /* Popped balloons are already gone or fading out - leave them. */
         if (item.popped || !item.el) return;
-        /* Recompute anchors from stored normalized slots. */
-        var nx = item.anchor.nx !== undefined ? item.anchor.nx : (item.anchor.x / Math.max(1, area.w));
-        var ny = item.anchor.ny !== undefined ? item.anchor.ny : (item.anchor.y / Math.max(1, area.h));
-        item.anchor = { x: nx * area.w, y: ny * area.h, nx: nx, ny: ny };
+        item.anchor.x = clusterOff + item.anchor.nx * clusterW;
         item.size = size;
         item.aspect = aspectFor(item.color);
         item.el.style.width = size + 'px';
         item.el.style.height = Math.round(size * item.aspect) + 'px';
-        var lbl = item.el.querySelector('.balloon-label');
+        var lbl = item.inner.querySelector('.balloon-label');
         if (lbl) lbl.style.fontSize = labelFontSize(item.text, size) + 'px';
-        clampToArea(item);
-        place(item);
       });
       computeSway();
-    }
-
-    /* Store normalized anchors right after spawn so resize can restore. */
-    function rememberSlots() {
-      var area = rect();
-      items.forEach(function (item) {
-        item.anchor.nx = item.anchor.x / Math.max(1, area.w);
-        item.anchor.ny = item.anchor.y / Math.max(1, area.h);
-      });
+      /* Re-place immediately at the current progress so no balloon
+         shifts sideways or teleports after a resize. */
+      if (mode === 'fly') {
+        applyFlyPositions(elapsed, area);
+      } else if (mode !== 'escape') {
+        items.forEach(function (item) {
+          if (item.popped || !item.el) return;
+          placeAtSpawn(item, area);
+        });
+      }
     }
 
     /* Remove every balloon, cancel its pending animation timers and wipe
-       leftover particles. Called before each new question so nothing from
-       the previous question can linger as a "ghost". */
+       leftover particles. Called before each new question. */
     function clear() {
+      if (startHoldTimer) { clearTimeout(startHoldTimer); startHoldTimer = null; }
+      if (escapeTimer) { clearTimeout(escapeTimer); escapeTimer = null; }
+      if (escapeResolve) { escapeResolve = null; }
       items.forEach(function (item) {
         (item._timers || []).forEach(function (tid) { clearTimeout(tid); });
         if (item.el) item.el.remove();
       });
       items = [];
+      mode = 'idle';
+      elapsed = 0;
       if (fxLayer) {
         while (fxLayer.firstChild) fxLayer.removeChild(fxLayer.firstChild);
       }
@@ -617,23 +655,23 @@
     function destroy() {
       if (raf) cancelAnimationFrame(raf);
       raf = null;
-      running = false;
       clear();
     }
 
     return {
-      spawn: function (options, opts) {
-        spawn(options, opts);
-        rememberSlots();
-      },
+      spawn: spawn,
+      advanceClock: advanceClock,
       pop: pop,
       fizzle: fizzle,
       disable: disable,
       setFrozen: setFrozen,
+      escape: escape,
       relayout: relayout,
       clear: clear,
       destroy: destroy,
-      colors: COLORS
+      colors: COLORS,
+      isFlying: function () { return mode === 'fly' && !frozen; },
+      getElapsed: function () { return elapsed; }
     };
   }
 

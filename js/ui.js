@@ -168,7 +168,9 @@
     var pct = Math.max(0, Math.min(1, remaining / total));
     el['timer-bar'].style.transform = 'scaleX(' + pct + ')';
     el['timer-num'].textContent = Math.ceil(Math.max(0, remaining)) + 's';
-    el['timer-wrap'].classList.toggle('low', remaining <= total * 0.25);
+    /* Time-pressure colors: normal, orange under 8s, red under 5s. */
+    el['timer-wrap'].classList.toggle('low', remaining <= 5);
+    el['timer-wrap'].classList.toggle('warn', remaining > 5 && remaining <= 8);
   }
 
   function bossBanner(show) {

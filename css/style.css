@@ -93,7 +93,7 @@ button:disabled { cursor: default; }
 
 @keyframes screenIn {
   from { opacity: 0; transform: scale(1.02); }
-  to { opacity: 1; transform: scale(1); }
+  to { opacity: 1; transform: none; }
 }
 
 /* ============ buttons ============ */
@@ -232,10 +232,10 @@ button:disabled { cursor: default; }
   padding-bottom: max(24px, env(safe-area-inset-bottom));
 }
 
-.menu-logo { min-height: 90px; display: flex; align-items: center; justify-content: center; }
+.menu-logo { min-height: 96px; display: flex; align-items: center; justify-content: center; }
 
 .logo-text {
-  font-size: clamp(2.6rem, 10vw, 4.2rem);
+  font-size: clamp(2.8rem, 12vw, 4.8rem);
   font-weight: 900;
   color: #fff;
   text-shadow: 0 4px 0 var(--brand-dark), 0 8px 24px rgba(29, 42, 58, 0.35);
@@ -245,19 +245,20 @@ button:disabled { cursor: default; }
 
 .logo-img { max-height: 110px; width: auto; filter: drop-shadow(0 6px 14px rgba(29,42,58,.3)); }
 
-.menu-sub { font-weight: 600; color: var(--ink-soft); font-size: 1.02rem; text-shadow: 0 1px 0 rgba(255,255,255,.6); }
+.menu-sub { font-weight: 600; color: var(--ink-soft); font-size: 1.08rem; text-shadow: 0 1px 0 rgba(255,255,255,.6); }
 
 .menu-stats { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 
 .chip {
   background: var(--card);
-  padding: 8px 16px;
+  padding: 9px 18px;
+  font-size: 1.02rem;
   border-radius: 999px;
   font-weight: 700;
   box-shadow: 0 3px 0 rgba(29, 42, 58, 0.12);
 }
 
-.menu-buttons { display: flex; flex-direction: column; gap: 12px; width: min(320px, 100%); margin-top: 6px; }
+.menu-buttons { display: flex; flex-direction: column; gap: 13px; width: min(360px, 100%); margin-top: 8px; }
 
 .menu-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 
@@ -286,8 +287,8 @@ button:disabled { cursor: default; }
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 16px;
   padding: 18px;
   padding-bottom: max(18px, env(safe-area-inset-bottom));
   align-content: start;
@@ -324,7 +325,7 @@ button:disabled { cursor: default; }
 
 .lc-lock { grid-area: lock; font-size: 1.1rem; }
 
-.lc-name { grid-area: name; font-weight: 800; font-size: 1.02rem; margin-top: 2px; }
+.lc-name { grid-area: name; font-weight: 800; font-size: 1.08rem; margin-top: 2px; }
 
 .lc-topic { grid-area: topic; color: var(--ink-soft); font-size: 0.8rem; line-height: 1.25; min-height: 2.4em; }
 
@@ -489,9 +490,17 @@ button:disabled { cursor: default; }
   transition: background 0.4s;
 }
 
-.timer-wrap.low .timer-bar { background: linear-gradient(90deg, #ff5a5f, #ff9d2e); }
+.timer-wrap.low .timer-bar { background: linear-gradient(90deg, #ff3b4e, #ff7a2e); }
 
-.timer-wrap.low .timer-num { color: #fff; background: #e23e3c; animation: pulse 0.6s ease infinite alternate; }
+.timer-wrap.low .timer-num {
+  color: #fff;
+  background: #e23e3c;
+  animation: pulse 0.6s ease infinite alternate;
+}
+
+.timer-wrap.warn .timer-bar { background: linear-gradient(90deg, #ffa62e, #ffd23f); }
+
+.timer-wrap.warn .timer-num { color: #8a5200; background: #ffd88a; }
 
 .timer-num {
   font-weight: 900;
@@ -801,6 +810,29 @@ button:disabled { cursor: default; }
   pointer-events: none;
 }
 
+/* Inner wrapper: sway, tilt and pop animations live here so they never
+   fight the outer position transform driven by requestAnimationFrame. */
+.balloon-inner {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+.balloon-inner .balloon-img,
+.balloon-inner .balloon-label {
+  pointer-events: none;
+}
+
+/* Burst pulse when a balloon pops (overrides the sway transform). */
+.balloon-inner.burst {
+  animation: burstPulse 0.3s cubic-bezier(0.25, 0.9, 0.35, 1) both;
+}
+
+@keyframes burstPulse {
+  from { transform: scale(1.12); }
+  to { transform: scale(1); }
+}
+
 /* Word overlay: centered on the inflated body only — the knot and
    string at the bottom of the artwork stay clear of the text. */
 .balloon-label {
@@ -900,7 +932,7 @@ button:disabled { cursor: default; }
 .feedback.show { opacity: 1; pointer-events: auto; }
 
 .fb-card {
-  width: min(520px, calc(100vw - 32px));
+  width: min(560px, calc(100vw - 32px));
   max-height: calc(100dvh - 40px);
   overflow-y: auto;
   background: linear-gradient(rgba(255, 255, 255, 0.97), rgba(255, 255, 255, 0.94)) padding-box,
@@ -933,7 +965,7 @@ button:disabled { cursor: default; }
 
 .fb-icon { font-size: 2.8rem; line-height: 1; }
 
-.fb-card h3 { font-size: 1.45rem; letter-spacing: 0.2px; }
+.fb-card h3 { font-size: 1.6rem; letter-spacing: 0.2px; }
 
 .feedback.correct .fb-card h3 { color: #1d9e55; }
 .feedback.wrong .fb-card h3 { color: #d6404b; }
@@ -949,8 +981,8 @@ button:disabled { cursor: default; }
 
 .fb-your, .fb-correct {
   border-radius: 14px;
-  padding: 8px 12px;
-  font-size: 0.95rem;
+  padding: 9px 14px;
+  font-size: 1rem;
   font-weight: 600;
 }
 
@@ -960,7 +992,7 @@ button:disabled { cursor: default; }
 
 .fb-correct { background: rgba(46, 204, 113, 0.13); color: #187a45; }
 
-.fb-correct b { font-size: 1.15rem; color: #146b3d; }
+.fb-correct b { font-size: 1.25rem; color: #146b3d; }
 
 .fb-sentence {
   font-size: 1.02rem;
@@ -973,7 +1005,7 @@ button:disabled { cursor: default; }
   overflow-wrap: break-word;
 }
 
-.fb-explain { font-size: 0.92rem; line-height: 1.45; color: var(--ink-soft); overflow-wrap: break-word; }
+.fb-explain { font-size: 0.98rem; line-height: 1.5; color: var(--ink-soft); overflow-wrap: break-word; }
 
 .fb-points { font-weight: 900; color: #1d9e55; font-size: 1rem; }
 

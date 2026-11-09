@@ -33,7 +33,6 @@
   var state = 'MENU';
   var field = null;           /* balloon field instance */
   var loopId = null;
-  var lastFrame = 0;
   var playAreaEl = null;
 
   var run = null;             /* current level run */
@@ -54,13 +53,13 @@
       usedFifty: false,
       shieldActive: false,
       freezeLeft: 0,
-      timed: level.timeLimitSeconds != null,
-      limit: level.timeLimitSeconds || 0,
-      remaining: 0,
+      limit: level.timeLimitSeconds || 24,
+      remaining: level.timeLimitSeconds || 24,
       enabledIds: [],
       correctId: null,
-      pendingEnd: null,       /* 'gameover' once hearts hit zero */
+      pendingEnd: null,
       qToken: 0,
+      warned: false,
       finalRun: false
     };
   }
@@ -167,16 +166,17 @@
     run.attempts = 0;
     run.usedFifty = false;
     run.pendingEnd = null;
+    run.warned = false;
     run.correctId = q.correctOptionId;
 
-    /* Boss questions on timed levels get bonus seconds. */
+    /* Every question is an escape race; bosses get bonus seconds. */
+    run.limit = (run.level.timeLimitSeconds || 24) + (isBoss ? (run.level.bossBonusSeconds || 4) : 0);
     run.remaining = run.limit;
-    if (run.timed && isBoss) run.remaining += run.level.bossBonusSeconds || 0;
 
     ui.hideFeedback();
     ui.question(q, isBoss, index, 5);
     ui.hud(hudData());
-    ui.timer(run.timed ? run.remaining : null, run.timed ? run.remaining : null);
+    ui.timer(run.limit, run.limit); /* full clock during the reading grace */
 
     /* Remove ALL balloons, timers and particles from the previous
        question before anything new is created. */
@@ -200,7 +200,12 @@
 
     field.spawn(
       options.map(function (o, i) { return { id: o.id, text: o.text, color: colors[i] }; }),
-      { pattern: run.level.movementPattern, speed: run.level.movementSpeed }
+      {
+        pattern: run.level.movementPattern,
+        speed: run.level.movementSpeed,
+        limitSec: run.limit,
+        holdMs: isBoss ? 1300 : 900 /* reading/entrance grace before the rise */
+      }
     );
 
     /* Power-bar state depends on the fresh option set - update after spawn. */
@@ -282,8 +287,8 @@
       run.streak++;
       run.maxCombo = Math.max(run.maxCombo, run.streak);
       breakdown = rules.scoreForAnswer({
-        timed: run.timed,
-        remaining: run.remaining,
+        timed: true,
+        remaining: Math.max(0, run.remaining),
         limit: run.limit,
         streak: run.streak
       });
@@ -323,6 +328,8 @@
     updatePowerbar(); /* all power-ups disabled while reviewing */
   }
 
+  /* Escape timeout: fire exactly once, animate the balloons out through
+     the top, apply the existing life rules, then show the review card. */
   function onTimeout() {
     if (state !== 'PLAYING' || !run || run.locked) return;
     run.locked = true;
@@ -330,23 +337,25 @@
     var correctText = optionText(q, run.correctId);
     run.hearts--;
     run.streak = 0;
-    run.mistakes.push('Q' + (run.qIndex + 1) + ': time ran out (answer: ' + correctText + ')');
+    run.mistakes.push('Q' + (run.qIndex + 1) + ': the balloons escaped (answer: ' + correctText + ')');
     audio.play('wrong');
     if (run.hearts <= 0) run.pendingEnd = 'gameover';
     ui.hud(hudData(0));
-
-    setStateSoft('ANSWER_REVIEW');
-    field.setFrozen(true);
-    ui.showReview({
-      kind: 'timeout',
-      yourText: null,
-      correctText: correctText,
-      sentence: completedSentence(q, correctText),
-      explanation: q.explanation,
-      breakdown: null,
-      btnLabel: (run.pendingEnd === 'gameover' || run.qIndex >= 4) ? 'See Results →' : 'Next Question →'
-    });
     updatePowerbar();
+
+    field.escape().then(function () {
+      if (!inGameFlow()) return;
+      setStateSoft('ANSWER_REVIEW');
+      ui.showReview({
+        kind: 'timeout',
+        yourText: null,
+        correctText: correctText,
+        sentence: completedSentence(q, correctText),
+        explanation: q.explanation,
+        breakdown: null,
+        btnLabel: (run.pendingEnd === 'gameover' || run.qIndex >= 4) ? 'See Results →' : 'Next Question →'
+      });
+    });
   }
 
   /* The ONLY way a question advances: the review card's button.
@@ -432,27 +441,23 @@
     if (root.BP.onNavigate) root.BP.onNavigate('gamecomplete');
   }
 
-  /* ---------------- Frame clock (timer + freeze) ----------------
-     Interval-based with performance.now() deltas: keeps countdown and
-     freeze timing correct even where rAF is throttled or suspended.
-     dt is clamped so a long stall (hidden tab -> auto-pause) can never
-     burn more than half a second of the player's time. */
+  /* ---------------- Frame clock ----------------
+     ONE authoritative gameplay clock: the balloon field's rAF accumulates
+     active play time (it halts when frozen, paused, reviewing or hidden),
+     and this light interval only mirrors it into the HUD, fires the warn
+     tick and triggers the escape timeout. Nothing can desynchronize:
+     countdown, balloon travel and speed bonus all read the same elapsed
+     seconds. */
   function startLoop() {
     if (loopId) clearInterval(loopId);
-    lastFrame = performance.now();
     loopId = setInterval(loop, 100);
   }
 
   function loop() {
-    var now = performance.now();
-    var dt = (now - lastFrame) / 1000;
-    lastFrame = now;
-    if (dt < 0) dt = 0;
-    if (dt > 0.5) dt = 0.5;
     if (state !== 'PLAYING' || !run) return;
 
     if (run.freezeLeft > 0) {
-      run.freezeLeft -= dt * 1000;
+      run.freezeLeft -= 100;
       if (run.freezeLeft <= 0) {
         run.freezeLeft = 0;
         field.setFrozen(false);
@@ -462,13 +467,22 @@
       }
       return;
     }
-    if (run.timed) {
-      run.remaining -= dt;
-      ui.timer(run.remaining, run.limit);
-      if (run.remaining <= 0) {
-        run.remaining = 0;
-        onTimeout();
-      }
+    if (!field.isFlying()) return; /* still in the reading/entrance grace */
+
+    /* Advance the single authoritative clock; countdown, balloon travel
+     * and speed bonus all read these same seconds. */
+    field.advanceClock(100);
+    var remaining = run.limit - field.getElapsed();
+    run.remaining = remaining;
+    ui.timer(remaining, run.limit);
+
+    if (remaining <= 5 && !run.warned) {
+      run.warned = true;
+      audio.play('tick');
+    }
+    if (remaining <= 0) {
+      run.remaining = 0;
+      onTimeout();
     }
   }
 
@@ -544,7 +558,6 @@
     if (state !== 'PAUSED') return;
     ui.overlay('overlay-pause', false);
     state = prevStateBeforePause; /* PLAYING, POPPING or ANSWER_REVIEW */
-    lastFrame = performance.now();
     if (state === 'PLAYING' && run.freezeLeft > 0) {
       field.setFrozen(true);
       var veil = document.getElementById('freeze-veil');

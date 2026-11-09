@@ -102,6 +102,7 @@
     correct: function () { tone(660, 0, 0.12, 'triangle', 0.16); tone(880, 0.1, 0.16, 'triangle', 0.16); },
     wrong: function () { tone(190, 0, 0.2, 'square', 0.1, 120); tone(140, 0.16, 0.22, 'square', 0.08, 95); },
     combo: function () { tone(523, 0, 0.07, 'sine', 0.14); tone(659, 0.07, 0.07, 'sine', 0.14); tone(784, 0.14, 0.1, 'sine', 0.14); },
+    tick: function () { tone(1180, 0, 0.07, 'sine', 0.09); },
     star: function () { tone(1319, 0, 0.1, 'sine', 0.12); tone(1568, 0.09, 0.14, 'sine', 0.12); },
     levelWin: function () { tone(523, 0, 0.12, 'triangle', 0.15); tone(659, 0.12, 0.12, 'triangle', 0.15); tone(784, 0.24, 0.12, 'triangle', 0.15); tone(1047, 0.36, 0.24, 'triangle', 0.16); },
     gameOver: function () { tone(392, 0, 0.2, 'triangle', 0.14); tone(330, 0.2, 0.2, 'triangle', 0.13); tone(262, 0.4, 0.24, 'triangle', 0.12); tone(196, 0.62, 0.34, 'triangle', 0.11); },
