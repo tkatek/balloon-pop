@@ -67,9 +67,7 @@
     s.totalScore = (s.totalScore || 0) + result.score;
 
     var idx = level.index; /* 1-based level number */
-    if (idx >= s.levelOrder) {
-      s.unlocked = Math.max(s.unlocked, Math.min(idx + 1, s.levelOrder));
-    }
+    s.unlocked = Math.max(s.unlocked, Math.min(idx + 1, s.levelOrder));
 
     var granted = [];
     function grant(type, count) {

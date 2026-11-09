@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Balloon Pop - a colorful English grammar game. Pop the balloon with the correct answer!">
+  <meta name="theme-color" content="#59b7ff">
+  <title>Balloon Pop — English Grammar Game</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ============ LOADING ============ -->
+    <section class="screen active" id="screen-loading" aria-label="Loading">
+      <div class="loading-box">
+        <div class="loading-balloon"></div>
+        <h1>Balloon Pop</h1>
+        <p id="load-status">Blowing up balloons…</p>
+      </div>
+    </section>
+
+    <!-- ============ MENU ============ -->
+    <section class="screen" id="screen-menu" aria-label="Main menu">
+      <div id="menu-balloons" aria-hidden="true"></div>
+      <div class="menu-hero">
+        <div id="menu-logo" class="menu-logo">
+          <span class="logo-text">Balloon&nbsp;Pop</span>
+        </div>
+        <p class="menu-sub">Pop your way through 15 levels of English grammar!</p>
+        <div class="menu-stats">
+          <span class="chip">🏆 <b id="menu-total">0</b> pts</span>
+          <span class="chip">⭐ <b id="menu-stars">0 / 45</b></span>
+        </div>
+        <div class="menu-buttons">
+          <button class="btn big primary" id="btn-play">▶ Play</button>
+          <button class="btn big" id="btn-levels">🗺 Levels</button>
+          <button class="btn" id="btn-how">❓ How to play</button>
+        </div>
+        <div class="menu-row">
+          <button class="btn small" id="btn-sound">🔊 Sound On</button>
+          <button class="btn small danger" id="btn-reset">🗑 Reset progress</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LEVEL SELECT ============ -->
+    <section class="screen" id="screen-levels" aria-label="Level selection">
+      <header class="levels-head safe-top">
+        <button class="btn icon" id="btn-levels-back" aria-label="Back to menu">←</button>
+        <h2>Choose a level</h2>
+        <span id="levels-starcount">⭐ 0 / 45</span>
+      </header>
+      <div class="levels-grid safe-scroll" id="levels-grid"></div>
+    </section>
+
+    <!-- ============ GAME ============ -->
+    <section class="screen" id="screen-game" aria-label="Game">
+      <div class="game-wrap">
+        <header class="hud safe-top">
+          <div class="hud-left">
+            <button class="btn icon" id="btn-pause" aria-label="Pause">⏸</button>
+            <span id="hud-hearts" class="hearts" aria-label="Hearts"></span>
+          </div>
+          <div class="hud-mid">
+            <span id="hud-level" class="hud-level">Level</span>
+            <span id="hud-qnum" class="hud-qnum">Q 1/5</span>
+          </div>
+          <div class="hud-right">
+            <span id="hud-combo" class="combo">×2</span>
+            <span id="hud-score" class="score">0</span>
+            <span id="hud-best" class="best">Best 0</span>
+          </div>
+        </header>
+
+        <div id="timer-wrap" class="timer-wrap">
+          <div class="timer-rail"><div id="timer-bar" class="timer-bar"></div></div>
+          <span id="timer-num" class="timer-num">40s</span>
+          <span id="boss-badge" class="boss-badge">BOSS</span>
+        </div>
+
+        <div id="question-card" class="question-card">
+          <div class="q-head">
+            <span id="question-type" class="q-type">Complete the sentence</span>
+            <span id="q-dots" class="q-dots" aria-label="Question progress"></span>
+          </div>
+          <p id="question-prompt" class="q-prompt">…</p>
+        </div>
+
+        <div id="play-area" class="play-area">
+          <div id="freeze-veil" class="freeze-veil" aria-hidden="true"><span>❄ FROZEN ❄</span></div>
+          <div id="fx-layer" class="fx-layer" aria-hidden="true"></div>
+          <div id="feedback" class="feedback" role="dialog" aria-modal="true" aria-label="Answer review">
+            <div class="fb-card">
+              <span id="fb-icon" class="fb-icon">🎉</span>
+              <h3 id="fb-title">Nice!</h3>
+              <div class="fb-answers">
+                <p id="fb-your" class="fb-your"></p>
+                <p id="fb-correct" class="fb-correct"></p>
+              </div>
+              <p id="fb-sentence" class="fb-sentence"></p>
+              <p id="fb-detail" class="fb-explain"></p>
+              <p id="fb-breakdown" class="fb-points"></p>
+              <button class="btn big primary fb-next" id="btn-fb-next">Next Question →</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="powerbar safe-bottom">
+          <button class="pu pu-freeze" id="pu-freeze" aria-label="Freeze power-up">
+            <span class="pu-ic">❄️</span><span class="pu-t">Freeze</span><span class="pu-n" id="pu-freeze-n">0</span>
+          </button>
+          <button class="pu pu-fifty" id="pu-fifty" aria-label="50/50 power-up">
+            <span class="pu-ic">✂️</span><span class="pu-t">50/50</span><span class="pu-n" id="pu-fifty-n">0</span>
+          </button>
+          <button class="pu pu-shield" id="pu-shield" aria-label="Shield power-up">
+            <span class="pu-ic">🛡️</span><span class="pu-t">Shield</span><span class="pu-n" id="pu-shield-n">0</span>
+          </button>
+        </div>
+
+        <div id="boss-banner" class="boss-banner" aria-hidden="true"><span>⚠ BOSS QUESTION ⚠</span></div>
+      </div>
+    </section>
+
+    <!-- ============ OVERLAYS ============ -->
+    <div class="overlay" id="overlay-pause" role="dialog" aria-label="Paused">
+      <div class="panel">
+        <h2>⏸ Paused</h2>
+        <button class="btn big primary" id="btn-resume">▶ Resume</button>
+        <button class="btn big" id="btn-restart">↻ Restart level</button>
+        <button class="btn big" id="btn-quit-levels">🗺 Back to levels</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="overlay-tutorial" role="dialog" aria-label="Tutorial">
+      <div class="tut-card">
+        <span id="tut-icon" class="tut-icon">🎈</span>
+        <h2 id="tut-title">Read the question</h2>
+        <p id="tut-text"></p>
+        <div id="tut-dots" class="tut-dots"></div>
+        <div class="tut-row">
+          <button class="btn small" id="btn-tut-skip">Skip</button>
+          <button class="btn primary" id="btn-tut-next">Next ➜</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="overlay-complete" role="dialog" aria-label="Level complete">
+      <div class="panel complete-panel">
+        <div id="lc-stars" class="lc-stars"><span class="st">★</span><span class="st">★</span><span class="st">★</span></div>
+        <h2 id="lc-title">Level complete!</h2>
+        <p id="lc-sub" class="lc-sub"></p>
+        <span id="lc-newbest" class="newbest">✨ New best score!</span>
+        <div class="lc-grid">
+          <div><b id="lc-correct">5 / 5</b><span>correct</span></div>
+          <div><b id="lc-score">0</b><span>score</span></div>
+          <div><b id="lc-best">0</b><span>best</span></div>
+          <div><b id="lc-accuracy">100%</b><span>accuracy</span></div>
+          <div><b id="lc-combo">×0</b><span>max combo</span></div>
+        </div>
+        <div id="lc-rewards" class="lc-rewards"></div>
+        <div class="panel-row">
+          <button class="btn primary" id="btn-lc-next">Next Level ➜</button>
+          <button class="btn" id="btn-lc-replay">↻ Replay</button>
+          <button class="btn" id="btn-lc-levels">🗺 Levels</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="overlay-gameover" role="dialog" aria-label="Game over">
+      <div class="panel gameover-panel">
+        <div class="go-balloon">🎈</div>
+        <h2>Game Over</h2>
+        <p class="lc-sub"><b id="go-level"></b> — <span id="go-progress"></span></p>
+        <p class="go-hint">Mistakes made:</p>
+        <ul id="go-mistakes" class="go-mistakes"></ul>
+        <div class="panel-row">
+          <button class="btn primary" id="btn-go-retry">↻ Retry level</button>
+          <button class="btn" id="btn-go-levels">🗺 Back to levels</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="overlay-complete-all" role="dialog" aria-label="Game complete">
+      <div class="panel master-panel">
+        <div class="trophy">🏆</div>
+        <h2>Balloon Master!</h2>
+        <p class="lc-sub">You finished all 15 levels. Incredible work!</p>
+        <div class="lc-grid">
+          <div><b id="gc-stars">⭐ 0 / 45</b><span>stars</span></div>
+          <div><b id="gc-score">0</b><span>career</span></div>
+        </div>
+        <div class="panel-row">
+          <button class="btn primary" id="btn-gc-levels">🗺 Levels</button>
+          <button class="btn" id="btn-gc-menu">🏠 Menu</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="overlay-confirm" role="dialog" aria-label="Confirm">
+      <div class="panel small-panel">
+        <h3 id="cf-title">Are you sure?</h3>
+        <p id="cf-text"></p>
+        <div class="panel-row">
+          <button class="btn danger" id="btn-cf-yes">Yes, do it</button>
+          <button class="btn" id="btn-cf-no">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status"></div>
+  </div>
+
+  <!-- Data first, then engine modules, then boot -->
+  <script src="data/questions.js"></script>
+  <script src="data/levels.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/balloons.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
