@@ -38,7 +38,7 @@
           <button class="btn" id="btn-how">❓ How to play</button>
         </div>
         <div class="menu-row">
-          <button class="btn small" id="btn-sound">🔊 Sound On</button>
+          <button class="btn small" id="btn-audio">🔊 Audio</button>
           <button class="btn small danger" id="btn-reset">🗑 Reset progress</button>
         </div>
       </div>
@@ -67,6 +67,7 @@
             <span id="hud-qnum" class="hud-qnum">Q 1/5</span>
           </div>
           <div class="hud-right">
+            <button class="btn icon hud-audio" id="btn-hud-audio" aria-label="Audio settings">🔊</button>
             <span id="hud-combo" class="combo">×2</span>
             <span id="hud-score" class="score">0</span>
             <span id="hud-best" class="best">Best 0</span>
@@ -194,6 +195,36 @@
           <button class="btn primary" id="btn-gc-levels">🗺 Levels</button>
           <button class="btn" id="btn-gc-menu">🏠 Menu</button>
         </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="overlay-audio" role="dialog" aria-label="Audio settings">
+      <div class="panel audio-panel">
+        <h2>🔊 Audio</h2>
+        <div class="ap-group">
+          <div class="ap-row">
+            <span class="ap-label">🎵 Music</span>
+            <button class="ap-toggle on" id="ap-music-toggle" aria-pressed="true"><i></i></button>
+          </div>
+          <div class="ap-row">
+            <span class="ap-label">Volume</span>
+            <input type="range" id="ap-music-vol" min="0" max="100" value="22" aria-label="Music volume">
+            <span class="ap-val" id="ap-music-val">22</span>
+          </div>
+        </div>
+        <div class="ap-group">
+          <div class="ap-row">
+            <span class="ap-label">🎈 Effects</span>
+            <button class="ap-toggle on" id="ap-sfx-toggle" aria-pressed="true"><i></i></button>
+          </div>
+          <div class="ap-row">
+            <span class="ap-label">Volume</span>
+            <input type="range" id="ap-sfx-vol" min="0" max="100" value="70" aria-label="Effects volume">
+            <span class="ap-val" id="ap-sfx-val">70</span>
+          </div>
+        </div>
+        <button class="btn" id="ap-mute">🔇 Mute All</button>
+        <button class="btn primary" id="ap-close">Done</button>
       </div>
     </div>
 

@@ -102,7 +102,8 @@
       totalScore: 0,
       powerups: { freeze: 1, fifty: 1, shield: 1 },
       tutorialDone: false,
-      audioOn: true
+      audioOn: true,
+      audio: { musicOn: true, sfxOn: true, musicVol: 0.22, sfxVol: 0.7, muted: false }
     };
   }
 

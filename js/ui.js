@@ -60,6 +60,8 @@
       'btn-go-retry', 'btn-go-levels',
       'overlay-complete-all', 'gc-stars', 'gc-score', 'btn-gc-levels', 'btn-gc-menu',
       'overlay-confirm', 'cf-title', 'cf-text', 'btn-cf-yes', 'btn-cf-no',
+      'overlay-audio', 'ap-music-toggle', 'ap-music-vol', 'ap-music-val',
+      'ap-sfx-toggle', 'ap-sfx-vol', 'ap-sfx-val', 'ap-mute', 'ap-close',
       'toast'
     ].forEach(function (id) { el[id] = $(id); });
   }

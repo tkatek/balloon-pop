@@ -167,6 +167,7 @@
     run.usedFifty = false;
     run.pendingEnd = null;
     run.warned = false;
+    run.warned8 = false;
     run.correctId = q.correctOptionId;
 
     /* Every question is an escape race; bosses get bonus seconds. */
@@ -294,18 +295,19 @@
       });
       run.score += breakdown.total;
       run.correctCount++;
-      audio.play(run.streak >= 3 ? 'combo' : 'correct');
+      audio.play(run.streak >= 5 ? 'highCombo' : (run.streak >= 3 ? 'combo' : 'correct'));
       ui.hud(hudData());
     } else {
       run.streak = 0;
       if (run.shieldActive) {
         run.shieldActive = false;
         shielded = true;
-        audio.play('shield');
+        audio.play('shieldUsed');
       } else {
         run.hearts--;
         run.mistakes.push('Q' + (run.qIndex + 1) + ': you chose “' + ctx.yourText + '”');
         audio.play('wrong');
+        audio.play('heartLost');
         if (run.hearts <= 0) run.pendingEnd = 'gameover';
       }
       ui.hud(hudData(0));
@@ -338,7 +340,8 @@
     run.hearts--;
     run.streak = 0;
     run.mistakes.push('Q' + (run.qIndex + 1) + ': the balloons escaped (answer: ' + correctText + ')');
-    audio.play('wrong');
+    audio.play('timeout');
+    audio.play('heartLost');
     if (run.hearts <= 0) run.pendingEnd = 'gameover';
     ui.hud(hudData(0));
     updatePowerbar();
@@ -362,6 +365,7 @@
      TRANSITIONING blocks a second click while the change is applied. */
   function feedbackNext() {
     if (state !== 'ANSWER_REVIEW' || !run) return;
+    audio.play('click');
     state = 'TRANSITIONING';
     ui.hideFeedback();
     if (run.pendingEnd === 'gameover') {
@@ -397,8 +401,12 @@
     };
     var prevBest = storage.get().best[level.id] || 0;
     var merged = rules.mergeLevelResult(storage.get(), level, result);
+    var wasUnlocked = storage.get().unlocked;
     storage.set(merged.save);
     audio.play('levelWin');
+    if (merged.save.unlocked > wasUnlocked) {
+      setTimeout(function () { audio.play('unlock'); }, 1000);
+    }
     run.finalRun = level.index === levels.length;
     ui.levelComplete({
       levelName: level.name,
@@ -436,7 +444,7 @@
     var stars = levels.reduce(function (acc, lv) { return acc + (save.stars[lv.id] || 0); }, 0);
     setStateSoft('GAME_COMPLETE');
     ui.overlay('overlay-complete', false);
-    audio.play('levelWin');
+    audio.play('fanfare');
     ui.gameComplete({ stars: stars, maxStars: levels.length * 3, totalScore: save.totalScore });
     if (root.BP.onNavigate) root.BP.onNavigate('gamecomplete');
   }
@@ -476,6 +484,10 @@
     run.remaining = remaining;
     ui.timer(remaining, run.limit);
 
+    if (remaining <= 8 && !run.warned8) {
+      run.warned8 = true;
+      audio.play('warn');
+    }
     if (remaining <= 5 && !run.warned) {
       run.warned = true;
       audio.play('tick');
@@ -530,13 +542,13 @@
         run.enabledIds = run.enabledIds.filter(function (x) { return x !== id; });
         field.fizzle(id);
       });
-      audio.play('click');
+      audio.play('fifty');
     } else if (type === 'shield') {
       if (run.shieldActive) return;
       save.powerups.shield--;
       storage.set(save);
       run.shieldActive = true;
-      audio.play('shield');
+      audio.play('shieldOn');
     }
     updatePowerbar();
   }
@@ -551,12 +563,14 @@
     if (!setState('PAUSED')) return;
     stopAuto();
     field.setFrozen(true);
+    audio.pauseMusic();
     ui.overlay('overlay-pause', true);
   }
 
   function resume() {
     if (state !== 'PAUSED') return;
     ui.overlay('overlay-pause', false);
+    audio.resumeMusic();
     state = prevStateBeforePause; /* PLAYING, POPPING or ANSWER_REVIEW */
     if (state === 'PLAYING' && run.freezeLeft > 0) {
       field.setFrozen(true);

@@ -30,6 +30,19 @@
               fresh.powerups[k] = v;
             });
           }
+          /* Audio preferences (music/sfx toggles, volumes, mute). Older
+             saves only had audioOn -> map it to master mute. */
+          if (data.audio && typeof data.audio === 'object') {
+            fresh.audio = {
+              musicOn: data.audio.musicOn !== false,
+              sfxOn: data.audio.sfxOn !== false,
+              musicVol: Math.min(1, Math.max(0, Number(data.audio.musicVol) || 0.22)),
+              sfxVol: Math.min(1, Math.max(0, Number(data.audio.sfxVol) || 0.7)),
+              muted: !!data.audio.muted
+            };
+          } else if (data.audioOn === false) {
+            fresh.audio.muted = true;
+          }
           return fresh;
         }
       } catch (e) {

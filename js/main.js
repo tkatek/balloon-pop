@@ -107,12 +107,9 @@
       startTutorial(function () { goMenu(); });
     });
 
-    $('btn-sound').addEventListener('click', function () {
-      save.audioOn = !(save.audioOn !== false);
-      audio.setEnabled(save.audioOn);
-      persist();
-      ui.renderMenu(save, totalStars(), BP.levels.length);
-      if (save.audioOn) audio.play('click');
+    $('btn-audio').addEventListener('click', function () {
+      audio.play('click');
+      openAudioPanel();
     });
 
     $('btn-reset').addEventListener('click', function () {
@@ -120,13 +117,21 @@
         BP.storage.clear();
         save = BP.rules.freshSave(BP.levels.length);
         persist();
-        audio.setEnabled(save.audioOn);
+        audio.setPrefs(save.audio);
+        syncAudioUI();
         ui.renderMenu(save, totalStars(), BP.levels.length);
         ui.toast('Progress reset');
       });
     });
 
     /* HUD / gameplay */
+    $('btn-hud-audio').addEventListener('click', function () {
+      var p = audio.getPrefs();
+      audio.setMuted(!p.muted);
+      audio.play('click');
+      persistAudio();
+      syncAudioUI();
+    });
     $('btn-pause').addEventListener('click', game.pause);
     $('btn-resume').addEventListener('click', game.resume);
     $('btn-restart').addEventListener('click', game.restartLevel);
@@ -151,6 +156,8 @@
       goMenu();
     });
 
+    wireAudioPanel();
+
     /* Tutorial + dialogs */
     $('btn-tut-next').addEventListener('click', ui.tutorialNext);
     $('btn-tut-skip').addEventListener('click', ui.tutorialSkip);
@@ -171,6 +178,7 @@
 
     /* Auto-pause when the tab is hidden (prevents surprise timeouts). */
     document.addEventListener('visibilitychange', function () {
+      BP.audio.handleVisibility(document.hidden);
       if (document.hidden && game.getState() === 'PLAYING') game.pause();
     });
 
@@ -184,6 +192,85 @@
         game.handleResize();
         decorateMenu();
       }, 160);
+    });
+  }
+
+  /* ---------- audio settings panel ---------- */
+
+  var audioSaveTimer = null;
+
+  function persistAudio() {
+    save.audio = BP.audio.getPrefs();
+    save.audioOn = !save.audio.muted; /* legacy field */
+    persist();
+  }
+
+  function syncAudioUI() {
+    var p = BP.audio.getPrefs();
+    var mt = $('ap-music-toggle'), st = $('ap-sfx-toggle');
+    mt.classList.toggle('on', p.musicOn);
+    mt.setAttribute('aria-pressed', String(p.musicOn));
+    st.classList.toggle('on', p.sfxOn);
+    st.setAttribute('aria-pressed', String(p.sfxOn));
+    $('ap-music-vol').value = Math.round(p.musicVol * 100);
+    $('ap-sfx-vol').value = Math.round(p.sfxVol * 100);
+    $('ap-music-val').textContent = Math.round(p.musicVol * 100);
+    $('ap-sfx-val').textContent = Math.round(p.sfxVol * 100);
+    var muteBtn = $('ap-mute');
+    muteBtn.textContent = p.muted ? '🔈 Unmute All' : '🔇 Mute All';
+    var hud = $('btn-hud-audio');
+    if (hud) {
+      hud.textContent = p.muted ? '🔇' : (p.musicOn || p.sfxOn ? '🔊' : '🔈');
+      hud.setAttribute('aria-pressed', String(p.muted));
+    }
+    var menuBtn = $('btn-audio');
+    if (menuBtn) menuBtn.textContent = p.muted ? '🔇 Audio (muted)' : '🔊 Audio';
+  }
+
+  function openAudioPanel() {
+    syncAudioUI();
+    BP.ui.overlay('overlay-audio', true);
+  }
+
+  function closeAudioPanel() {
+    BP.ui.overlay('overlay-audio', false);
+    persistAudio();
+  }
+
+  function wireAudioPanel() {
+    $('ap-close').addEventListener('click', function () { BP.audio.play('click'); closeAudioPanel(); });
+    $('ap-mute').addEventListener('click', function () {
+      var p = BP.audio.getPrefs();
+      BP.audio.setMuted(!p.muted);
+      BP.audio.play('click');
+      persistAudio();
+      syncAudioUI();
+    });
+    $('ap-music-toggle').addEventListener('click', function () {
+      var p = BP.audio.getPrefs();
+      BP.audio.setMusicEnabled(!p.musicOn);
+      BP.audio.play('click');
+      persistAudio();
+      syncAudioUI();
+    });
+    $('ap-sfx-toggle').addEventListener('click', function () {
+      var p = BP.audio.getPrefs();
+      BP.audio.setSFXEnabled(!p.sfxOn);
+      BP.audio.play('click');
+      persistAudio();
+      syncAudioUI();
+    });
+    $('ap-music-vol').addEventListener('input', function () {
+      BP.audio.setMusicVolume(this.value / 100);
+      $('ap-music-val').textContent = this.value;
+      if (audioSaveTimer) clearTimeout(audioSaveTimer);
+      audioSaveTimer = setTimeout(persistAudio, 400);
+    });
+    $('ap-sfx-vol').addEventListener('input', function () {
+      BP.audio.setSFXVolume(this.value / 100);
+      $('ap-sfx-val').textContent = this.value;
+      if (audioSaveTimer) clearTimeout(audioSaveTimer);
+      audioSaveTimer = setTimeout(persistAudio, 400);
     });
   }
 
@@ -217,7 +304,7 @@
     }
 
     save = BP.storage.load(BP.levels.length);
-    BP.audio.setEnabled(save.audioOn !== false);
+    BP.audio.setPrefs(save.audio || { musicOn: save.audioOn !== false, sfxOn: true, muted: save.audioOn === false });
 
     BP.game.init({
       ui: BP.ui,
