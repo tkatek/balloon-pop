@@ -105,7 +105,8 @@
       var unlocked = num <= save.unlocked;
       var stars = save.stars[lv.id] || 0;
       var card = document.createElement('button');
-      card.className = 'level-card' + (unlocked ? '' : ' locked') + (stars === 3 ? ' perfect' : '');
+      var tier = 't' + Math.min(5, Math.max(1, lv.difficulty));
+      card.className = 'level-card ' + tier + (unlocked ? '' : ' locked') + (stars === 3 ? ' perfect' : '');
       card.disabled = !unlocked;
       card.setAttribute('aria-label', lv.name + (unlocked ? '' : ' (locked)'));
 
@@ -114,6 +115,7 @@
 
       card.innerHTML =
         '<span class="lc-num">' + num + '</span>' +
+        '<span class="lc-cefr">' + lv.cefr + '</span>' +
         '<span class="lc-lock">🔒</span>' +
         '<span class="lc-name">' + lv.name + '</span>' +
         '<span class="lc-topic">' + lv.grammarTopic + '</span>' +
@@ -144,10 +146,18 @@
     el['hud-hearts'].innerHTML = out;
   }
 
+  var lastScore = 0;
   function hud(data) {
     el['hud-level'].textContent = data.levelName;
     el['hud-qnum'].textContent = 'Q ' + data.qIndex + '/' + data.qTotal;
-    el['hud-score'].textContent = data.score.toLocaleString();
+    var scoreEl = el['hud-score'];
+    scoreEl.textContent = data.score.toLocaleString();
+    if (data.score > lastScore) {
+      scoreEl.classList.remove('bump');
+      void scoreEl.offsetWidth;
+      scoreEl.classList.add('bump');
+    }
+    lastScore = data.score;
     el['hud-best'].textContent = 'Best ' + (data.best || 0).toLocaleString();
     hearts(data.hearts, 3);
     if (data.combo >= 2) {

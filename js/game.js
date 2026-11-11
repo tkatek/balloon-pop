@@ -184,14 +184,10 @@
     field.clear();
     field.setFrozen(false);
 
-    /* Device-aware option count, fixed for this whole question:
-       - desktop/tablet (play area >= 620px): all 4 (L1-3) / 5 (L4-15)
-       - phones: 3 on levels 1-3, 4 on later levels
-       The subset always contains the correct answer plus random wrongs,
-       and is never re-selected mid-question on resize. */
-    var areaW = (playAreaEl.getBoundingClientRect().width || root.innerWidth || 0);
+    /* Every question shows ALL of its options on every device: the
+       gap-aware mobile formations (triangle / 2x2 / 3+2) fit 3-5 answer
+       balloons inside the phone play area without body overlap. */
     var shown = q.options.length;
-    if (areaW < 620) shown = Math.min(shown, run.level.index <= 3 ? 3 : 4);
     var correctOpt = q.options.filter(function (o) { return o.id === run.correctId; })[0];
     var wrongOpts = shuffled(q.options.filter(function (o) { return o.id !== run.correctId; }))
       .slice(0, Math.max(0, shown - 1));

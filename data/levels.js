@@ -18,7 +18,7 @@
       "q004",
       "q005"
     ],
-    "timeLimitSeconds": 24,
+    "timeLimitSeconds": 21,
     "choiceCount": 4,
     "movementPattern": "float",
     "movementSpeed": 14,
@@ -46,7 +46,7 @@
       "q009",
       "q010"
     ],
-    "timeLimitSeconds": 24,
+    "timeLimitSeconds": 21,
     "choiceCount": 4,
     "movementPattern": "float",
     "movementSpeed": 16,
@@ -74,7 +74,7 @@
       "q014",
       "q015"
     ],
-    "timeLimitSeconds": 24,
+    "timeLimitSeconds": 21,
     "choiceCount": 4,
     "movementPattern": "float",
     "movementSpeed": 18,
@@ -102,7 +102,7 @@
       "q019",
       "q020"
     ],
-    "timeLimitSeconds": 22,
+    "timeLimitSeconds": 19,
     "choiceCount": 5,
     "movementPattern": "drift",
     "movementSpeed": 26,
@@ -130,7 +130,7 @@
       "q024",
       "q025"
     ],
-    "timeLimitSeconds": 22,
+    "timeLimitSeconds": 19,
     "choiceCount": 5,
     "movementPattern": "drift",
     "movementSpeed": 28,
@@ -158,7 +158,7 @@
       "q029",
       "q030"
     ],
-    "timeLimitSeconds": 22,
+    "timeLimitSeconds": 19,
     "choiceCount": 5,
     "movementPattern": "drift",
     "movementSpeed": 30,
@@ -186,7 +186,7 @@
       "q034",
       "q035"
     ],
-    "timeLimitSeconds": 20,
+    "timeLimitSeconds": 17,
     "choiceCount": 5,
     "movementPattern": "wave",
     "movementSpeed": 36,
@@ -214,7 +214,7 @@
       "q039",
       "q040"
     ],
-    "timeLimitSeconds": 20,
+    "timeLimitSeconds": 17,
     "choiceCount": 5,
     "movementPattern": "wave",
     "movementSpeed": 38,
@@ -242,7 +242,7 @@
       "q044",
       "q045"
     ],
-    "timeLimitSeconds": 20,
+    "timeLimitSeconds": 17,
     "choiceCount": 5,
     "movementPattern": "wave",
     "movementSpeed": 40,
@@ -270,7 +270,7 @@
       "q049",
       "q050"
     ],
-    "timeLimitSeconds": 19,
+    "timeLimitSeconds": 17,
     "choiceCount": 5,
     "movementPattern": "stagger",
     "movementSpeed": 42,
@@ -298,7 +298,7 @@
       "q054",
       "q055"
     ],
-    "timeLimitSeconds": 19,
+    "timeLimitSeconds": 17,
     "choiceCount": 5,
     "movementPattern": "stagger",
     "movementSpeed": 44,
@@ -326,7 +326,7 @@
       "q059",
       "q060"
     ],
-    "timeLimitSeconds": 19,
+    "timeLimitSeconds": 17,
     "choiceCount": 5,
     "movementPattern": "stagger",
     "movementSpeed": 46,
@@ -354,7 +354,7 @@
       "q064",
       "q065"
     ],
-    "timeLimitSeconds": 19,
+    "timeLimitSeconds": 16,
     "choiceCount": 5,
     "movementPattern": "combo",
     "movementSpeed": 50,
@@ -382,7 +382,7 @@
       "q069",
       "q070"
     ],
-    "timeLimitSeconds": 19,
+    "timeLimitSeconds": 16,
     "choiceCount": 5,
     "movementPattern": "combo",
     "movementSpeed": 52,
@@ -410,7 +410,7 @@
       "q074",
       "q075"
     ],
-    "timeLimitSeconds": 19,
+    "timeLimitSeconds": 16,
     "choiceCount": 5,
     "movementPattern": "combo",
     "movementSpeed": 56,

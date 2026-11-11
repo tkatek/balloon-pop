@@ -51,6 +51,16 @@
     stagger: { amp: 14 },
     combo:   { amp: 16 }
   };
+  /* Crossing intensity per pattern: fraction of the lane spacing a
+     balloon's drift may span. Above ~0.5 neighbours' paths overlap and
+     they occasionally cross while rising. */
+  var CROSS = {
+    float:   0.3,
+    drift:   0.5,
+    wave:    0.62,
+    stagger: 0.75,
+    combo:   0.88
+  };
   var TAU = Math.PI * 2;
 
   function buildCandidates() {
@@ -185,6 +195,7 @@
     var riseStartY = 0;         /* group rise band in px (body-aware) */
     var riseEndY = 0;
     var swayX = 26;
+    var crossFactor = CROSS.float;
     var areaCache = null;       /* geometry cache: no layout reads per frame */
 
     function rect() {
@@ -201,49 +212,71 @@
       return assets.aspects && assets.aspects[color] ? assets.aspects[color] : 1.18;
     }
 
+    /* Formation geometry for a question: landscape = single row;
+       portrait = dedicated mobile formations (2+1 triangle, 2x2, 3+2).
+       Slots carry their row index; the row pitch is body-based so
+       inflated bodies can never overlap each other. */
+    /* Portrait vs landscape must follow the VIEWPORT orientation: on
+       short phones the play area itself is wider than tall (chrome eats
+       height), which must NOT collapse the mobile grid to one row. */
+    function isPortrait() {
+      return root.innerWidth < root.innerHeight;
+    }
+
+    function formation(count, area) {
+      var slots = [];
+      if (!isPortrait()) {
+        for (var i = 0; i < count; i++) slots.push({ x: (i + 0.5) / count, row: 0 });
+        return { slots: slots, rows: 1 };
+      }
+      if (count === 3) {
+        slots.push({ x: 0.5, row: 0 });
+        slots.push({ x: 0.27, row: 1 });
+        slots.push({ x: 0.73, row: 1 });
+      } else if (count === 4) {
+        slots.push({ x: 0.28, row: 0 });
+        slots.push({ x: 0.72, row: 0 });
+        slots.push({ x: 0.28, row: 1 });
+        slots.push({ x: 0.72, row: 1 });
+      } else {
+        slots.push({ x: 0.18, row: 0 });
+        slots.push({ x: 0.5, row: 0 });
+        slots.push({ x: 0.82, row: 0 });
+        slots.push({ x: 0.3, row: 1 });
+        slots.push({ x: 0.7, row: 1 });
+      }
+      return { slots: slots, rows: 2 };
+    }
+
     function sizeFor(area, count) {
-      var aspect = 1.5; /* dominant real-asset aspect */
-      var cols, rows;
-      if (area.w / area.h >= 0.95) { cols = count; rows = 1; }
-      else { rows = 2; cols = count === 5 ? 3 : 2; }
+      var f = formation(count, area);
+      var cols = 1, rows = f.rows;
+      /* widest row decides the column count */
+      var perRow = {};
+      f.slots.forEach(function (sl) { perRow[sl.row] = (perRow[sl.row] || 0) + 1; });
+      Object.keys(perRow).forEach(function (r) { cols = Math.max(cols, perRow[r]); });
 
-      var clusterW = Math.min(area.w, ULTRAWIDE_CLUSTER) * 0.92;
-      var byW = clusterW / cols;
-      var byH = (area.h * 0.62) / rows / aspect; /* fit inside the rise band */
+      var phone = area.w < 620;
+      var gapX = phone ? 12 + area.w * 0.012 : 22;
+      var gapY = phone ? 16 + area.h * 0.012 : 26;
+      var bodyWFactor = 0.9;  /* visible body width vs image width */
+      var bodyHFactor = 0.99; /* visible body height vs image width */
 
-      var cap = count >= 5 ? 195 : 220;
+      var byW = (area.w * 0.94 - (cols - 1) * gapX) / cols / bodyWFactor;
+      var byH = (area.h * 0.62 - (rows - 1) * gapY) / rows / bodyHFactor;
+
+      var cap = phone ? Math.max(88, Math.min(118, area.w * 0.29))
+        : (count >= 5 ? 195 : 220);
       var s = Math.min(byW, byH, cap);
-
-      var floor = area.w < 640 ? 82 : 110;
+      var floor = phone ? 76 : 110;
       s = Math.max(Math.min(floor, byH), s);
       return Math.max(64, Math.round(s));
     }
 
-    /* Starting slots inside the LOWER part of the area. Portrait uses a
-       staggered formation (triangle for 3, 2+2, 3+2); landscape is one
-       row inside a centered cluster so ultrawide screens stay balanced. */
+    /* Slots for a fresh question: the formation's slots, shuffled so
+       answers are positionally fair (the geometry itself is fixed). */
     function slotsFor(count, area) {
-      var landscape = area.w / area.h >= 0.95;
-      var slots = [];
-      if (landscape) {
-        for (var i = 0; i < count; i++) slots.push({ x: (i + 0.5) / count, y: 0.80 });
-      } else if (count === 3) {
-        slots.push({ x: 0.5, y: 0.66 });
-        slots.push({ x: 0.26, y: 0.90 });
-        slots.push({ x: 0.74, y: 0.90 });
-      } else if (count === 4) {
-        slots.push({ x: 0.26, y: 0.66 });
-        slots.push({ x: 0.74, y: 0.66 });
-        slots.push({ x: 0.26, y: 0.90 });
-        slots.push({ x: 0.74, y: 0.90 });
-      } else {
-        slots.push({ x: 0.18, y: 0.64 });
-        slots.push({ x: 0.5, y: 0.64 });
-        slots.push({ x: 0.82, y: 0.64 });
-        slots.push({ x: 0.33, y: 0.90 });
-        slots.push({ x: 0.67, y: 0.90 });
-      }
-      /* Shuffle slot assignment so answers are positionally fair. */
+      var slots = formation(count, area).slots.slice();
       for (var k = slots.length - 1; k > 0; k--) {
         var j = Math.floor(Math.random() * (k + 1));
         var tmp = slots[k]; slots[k] = slots[j]; slots[j] = tmp;
@@ -265,16 +298,49 @@
       return Math.max(15, Math.min(f, 34));
     }
 
-    /* Horizontal sway budget keeps balloons in separate vertical lanes. */
-    function computeSway() {
+    /* Drift amplitude per balloon: a fraction of the lane spacing, so
+       neighbours' paths overlap and cross. DESKTOP ONLY - phones keep
+       stable lanes so answer bodies can never cover each other. */
+    function computeDrift(area) {
+      if (isPortrait()) { /* stable lanes on every portrait layout */
+        items.forEach(function (item) { item.drift1.amp = 0; item.drift2.amp = 0; });
+        return;
+      }
+      /* Lane spacing between DISTINCT columns only: on portrait grids
+         two rows share the same x, and a naive pairwise minimum would be
+         zero and kill all drift. */
       var minDx = Infinity;
       for (var a = 0; a < items.length; a++) {
         for (var b = a + 1; b < items.length; b++) {
           var dx = Math.abs(items[a].anchor.x - items[b].anchor.x);
+          if (dx > 1) minDx = Math.min(minDx, dx);
+        }
+      }
+      if (!isFinite(minDx)) minDx = area.w;
+      var phone = area.w < 620 ? 0.6 : 1;
+      items.forEach(function (item) {
+        var amp = minDx * crossFactor * phone;
+        /* never push a body edge inside 6px of the area bounds */
+        var maxAmp = Math.max(0, Math.min(item.anchor.x, area.w - item.anchor.x) - item.size / 2 - 6);
+        item.drift1.amp = Math.min(amp, maxAmp);
+        item.drift2.amp = item.drift1.amp * 0.5;
+      });
+    }
+
+    /* Sway lane budget: half the clear gap between same-row bodies, so
+       even the breeze sway can never make two bodies touch. */
+    function computeSway() {
+      var minDx = Infinity;
+      for (var a = 0; a < items.length; a++) {
+        for (var b = a + 1; b < items.length; b++) {
+          if (items[a].row !== items[b].row) continue;
+          var dx = Math.abs(items[a].anchor.x - items[b].anchor.x);
           minDx = Math.min(minDx, dx);
         }
       }
-      swayX = isFinite(minDx) ? Math.max(5, (minDx - items[0].size) / 2 - 8) : 40;
+      if (!isFinite(minDx)) { swayX = 40; return; }
+      var bodyW = (items[0] ? items[0].size : 100) * 0.9;
+      swayX = Math.max(2, (minDx - bodyW - 10) / 2);
     }
 
     function spawn(options, opts) {
@@ -285,6 +351,7 @@
       if (startHoldTimer) { clearTimeout(startHoldTimer); startHoldTimer = null; }
       limitSec = (opts && opts.limitSec) || 24;
       swayProfile = SWAY[(opts && opts.pattern)] || SWAY.float;
+      crossFactor = CROSS[(opts && opts.pattern)] || CROSS.float;
       var swaySpeed = (opts && opts.speed) || 30;
 
       var area = rect();
@@ -293,13 +360,17 @@
       var clusterW = Math.min(area.w, ULTRAWIDE_CLUSTER);
       var clusterOff = (area.w - clusterW) / 2;
 
-      /* Body-aware rise band: the clickable inflated body starts fully
-         visible at the bottom and stays fully visible at the deadline
-         (the string may dip below, the crown never clips above). */
+      /* Body-aware rise band with formation pitch: the group spawns in
+         the lower-middle of the area (not glued to the bottom) and the
+         topmost row's crown stays visible at the deadline. */
+      var phone = area.w < 620;
+      var frm = formation(options.length, area);
+      var rowDy = size * 0.99 + (phone ? 16 + area.h * 0.012 : 26); /* body height + gap */
+      var halfPitch = ((frm.rows - 1) / 2) * rowDy;
       var bodyHalf = size * 0.72; /* artwork half-height (2:3 aspect) */
-      riseEndY = bodyHalf + 2;
-      riseStartY = Math.max(riseEndY + 60, area.h - bodyHalf - 4);
-      swayAmp = swayProfile.amp * (area.w < 620 ? 0.55 : 1);
+      riseEndY = bodyHalf + halfPitch + 4;
+      riseStartY = Math.max(riseEndY + 60, area.h - bodyHalf - halfPitch - 10);
+      swayAmp = Math.min(swayProfile.amp * (phone ? 0.55 : 1), phone ? 5.5 : 18);
 
       options.forEach(function (opt, i) {
         var aspect = aspectFor(opt.color);
@@ -339,10 +410,11 @@
           inner: inner,
           anchor: {
             x: clusterOff + slot.x * clusterW,
-            nx: slot.x,
-            nyRow: slot.y - 0.78 /* normalized row offset for stagger */
+            nx: slot.x
           },
-          rowOff: (slot.y - 0.78) * area.h * 0.4, /* gentle stagger between rows */
+          slotIdx: i,                 /* stable slot for resize re-gridding */
+          row: slot.row,
+          rowOff: (slot.row - (frm.rows - 1) / 2) * rowDy, /* centered rows */
           size: size,
           aspect: aspect,
           phase: Math.random() * Math.PI * 2,
@@ -350,10 +422,19 @@
              brisker on higher levels), one tilt cycle per ~6-9s. */
           swayW: TAU / ((4.6 - (swaySpeed / 56) * 1.2) * (0.9 + Math.random() * 0.25)),
           rotW: TAU / (6 + Math.random() * 3),
+          /* Crossing drift path: two slow sines with independent phases,
+             generated once per question - never re-randomized per frame.
+             The amplitude is set after slots are known (computeDrift). */
+          drift1: { amp: 0, w: TAU / (7 + Math.random() * 3), p: Math.random() * TAU },
+          drift2: { amp: 0, w: TAU / (11 + Math.random() * 4), p: Math.random() * TAU },
+          curX: clusterOff + slot.x * clusterW,
           disabled: false,
           popped: false,
           _timers: []
         };
+        /* Stable per-question layering: crossings have predictable hit
+           targets and never flicker between z-levels. */
+        el.style.zIndex = 10 + i;
         items.push(item);
         /* Position BEFORE attaching: no first frame at (0,0). */
         placeAtSpawn(item);
@@ -374,6 +455,7 @@
       });
 
       computeSway();
+      computeDrift(area);
       areaCache = area;
       last = performance.now();
 
@@ -391,23 +473,38 @@
     }
 
     /* Apply the fly-frame for time renderT: linear group rise (subpixel,
-     * no rounding stair-step) + gentle sway + subtle tilt. */
+     * no rounding stair-step) + drifting X on the position wrapper +
+     * gentle breeze sway and direction-lean on the inner wrapper. */
     function applyFlyPositions(renderT) {
       var p = Math.min(1, renderT / limitSec);
       var groupY = riseStartY + (riseEndY - riseStartY) * p; /* 50% time = 50% travel */
       var amp = Math.min(swayAmp, swayX) * (reducedMotion ? 0.5 : 1);
       var rotAmp = 1.6 * (reducedMotion ? 0.5 : 1);
+      var area = areaRect();
       items.forEach(function (item) {
         if (item.popped || item.disabled || !item.el) return;
         var y = groupY + item.rowOff;
         item.y = y;
-        /* x anchor is static: rounded once; y stays subpixel for smooth
-         * vertical motion at any refresh rate. */
+        /* Crossing drift: two slow sines, clamped softly to the area so
+         * a balloon eases into vertical travel near the edges instead of
+         * bouncing. y stays subpixel for smooth motion at any FPS. */
+        var d1 = item.drift1, d2 = item.drift2;
+        var x = item.anchor.x +
+          Math.sin(renderT * d1.w + d1.p) * d1.amp +
+          Math.sin(renderT * d2.w + d2.p) * d2.amp;
+        var vx = Math.cos(renderT * d1.w + d1.p) * d1.w * d1.amp +
+          Math.cos(renderT * d2.w + d2.p) * d2.w * d2.amp;
+        var minX = item.size / 2 + 6;
+        var maxX = area.w - item.size / 2 - 6;
+        if (x < minX) x = minX; else if (x > maxX) x = maxX;
+        item.curX = x;
         item.el.style.transform =
-          'translate3d(' + Math.round(item.anchor.x - item.size / 2) + 'px,' +
+          'translate3d(' + (x - item.size / 2).toFixed(2) + 'px,' +
           (y - item.size * item.aspect / 2).toFixed(2) + 'px,0)';
         var sway = Math.sin(renderT * item.swayW + item.phase) * amp;
-        var tilt = Math.sin(renderT * item.rotW + item.phase * 0.7) * rotAmp;
+        /* lean slightly into the drift direction (capped) */
+        var lean = Math.max(-1.1, Math.min(1.1, vx * 0.05));
+        var tilt = Math.sin(renderT * item.rotW + item.phase * 0.7) * rotAmp + lean;
         item.inner.style.transform =
           'translateX(' + sway.toFixed(2) + 'px) rotate(' + tilt.toFixed(2) + 'deg)';
       });
@@ -433,6 +530,7 @@
     function placeAtSpawn(item) {
       var y = riseStartY + item.rowOff;
       item.y = y;
+      item.curX = item.anchor.x;
       item.el.style.transform =
         'translate3d(' + Math.round(item.anchor.x - item.size / 2) + 'px,' +
         (y - item.size * item.aspect / 2).toFixed(2) + 'px,0)';
@@ -461,7 +559,7 @@
           if (item.y === undefined) item.y = riseStartY + item.rowOff;
           item.y -= escapeSpeed * dt;
           item.el.style.transform =
-            'translate3d(' + Math.round(item.anchor.x - item.size / 2) + 'px,' +
+            'translate3d(' + (item.curX - item.size / 2).toFixed(2) + 'px,' +
             (item.y - item.size * item.aspect / 2).toFixed(2) + 'px,0)';
         });
         if (escapeT > 0.9 && escapeResolve) {
@@ -631,13 +729,11 @@
 
     /* ---- layout maintenance ---- */
 
-    /* Deterministic formation (no shuffle) - used by relayout so an
-       orientation change re-grids the balloons for the new shape without
-       resetting the question or its rise progress. */
+    /* Deterministic formation (no shuffle) for resize re-gridding: each
+       balloon keeps its original slot index, so answers never swap
+       places when the viewport changes shape. */
     function formationFor(count, area) {
-      var slots = slotsFor(count, area);
-      slots.sort(function (p, q) { return p.x - q.x; }); /* stable order */
-      return slots;
+      return formation(count, area).slots;
     }
 
     function relayout() {
@@ -648,17 +744,21 @@
       var clusterW = Math.min(area.w, ULTRAWIDE_CLUSTER);
       var clusterOff = (area.w - clusterW) / 2;
       /* Re-grid the formation for the current orientation (portrait 2x2 /
-         3+2 vs landscape single row), keeping each balloon's slot order. */
+         3+2 vs landscape single row); each balloon keeps its own slot. */
+      var phone = area.w < 620;
       var slots = formationFor(items.length, area);
-      items.forEach(function (item, i) {
+      var frmRows = formation(items.length, area).rows;
+      var rowDy = size * 0.99 + (phone ? 16 + area.h * 0.012 : 26);
+      var halfPitch = ((frmRows - 1) / 2) * rowDy;
+      items.forEach(function (item) {
         if (item.popped || !item.el) return;
-        var slot = slots[i];
+        var slot = slots[item.slotIdx] || slots[0];
         item.anchor.nx = slot.x;
-        item.anchor.nyRow = slot.y - 0.78;
         item.anchor.x = clusterOff + slot.x * clusterW;
+        item.row = slot.row;
+        item.rowOff = (slot.row - (frmRows - 1) / 2) * rowDy;
         item.size = size;
         item.aspect = aspectFor(item.color);
-        item.rowOff = item.anchor.nyRow * area.h * 0.4;
         item.el.style.width = size + 'px';
         item.el.style.height = Math.round(size * item.aspect) + 'px';
         var lbl = item.inner.querySelector('.balloon-label');
@@ -666,10 +766,11 @@
       });
       /* Recompute the rise band for the new geometry. */
       var bodyHalf = size * 0.72; /* artwork half-height (2:3 aspect) */
-      riseEndY = bodyHalf + 2;
-      riseStartY = Math.max(riseEndY + 60, area.h - bodyHalf - 4);
-      swayAmp = swayProfile.amp * (area.w < 620 ? 0.55 : 1);
+      riseEndY = bodyHalf + halfPitch + 4;
+      riseStartY = Math.max(riseEndY + 60, area.h - bodyHalf - halfPitch - 10);
+      swayAmp = Math.min(swayProfile.amp * (phone ? 0.55 : 1), phone ? 5.5 : 18);
       computeSway();
+      computeDrift(area);
       /* Re-place immediately at the current progress so no balloon
          shifts sideways or teleports after a resize. */
       if (mode === 'fly') {
